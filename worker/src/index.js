@@ -13,6 +13,8 @@ import OAuthProvider, {
   authorizationErrorRedirect,
 } from "@cloudflare/workers-oauth-provider";
 
+import { RIOT_LOGIN_URL, RiotError, fetchSnapshot, parseCookies, parseTokens, reauth, seal, unseal } from "./riot.js";
+
 const enc = new TextEncoder();
 const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
 const sha256 = async (s) => hex(await crypto.subtle.digest("SHA-256", enc.encode(s)));
@@ -103,8 +105,8 @@ function fmtDur(ms) {
 function render(snap, origin) {
   if (!snap) {
     return (
-      "No store data yet. This account's PC has not pushed a snapshot. " +
-      `Sign in at ${origin}/account to get the PC setup key, then run push_store.py with the Riot Client open.`
+      "No store data yet. Connect your Riot account at " +
+      `${origin}/account (Riot login, or the PC script) and then ask again.`
     );
   }
   const now = Date.now();
@@ -124,6 +126,35 @@ function render(snap, origin) {
     for (const s of nm.items || []) lines.push(`- ${s.name}: ${s.vp} VP (${s.discount}% off)`);
   }
   return lines.join("\n");
+}
+
+// Returns the store text. If the snapshot is missing or the store has rotated and the user chose
+// "stay logged in", refresh it from Riot using their saved (encrypted) cookies.
+async function getStoreText(env, userId, origin) {
+  let snap = await env.STORE.get("snap:" + userId, "json");
+  let note = "";
+  if (!snap || Date.now() > snap.daily_ends_at * 1000) {
+    const rec = await env.STORE.get("riot:" + userId, "json");
+    if (rec?.sealed && env.RIOT_ENCRYPTION_KEY) {
+      try {
+        const r = await reauth(await unseal(env.RIOT_ENCRYPTION_KEY, rec.sealed));
+        snap = (await fetchSnapshot(env, r.tokens)).snapshot;
+        await env.STORE.put("snap:" + userId, JSON.stringify(snap));
+        await env.STORE.put(
+          "riot:" + userId,
+          JSON.stringify({ ...rec, sealed: await seal(env.RIOT_ENCRYPTION_KEY, r.cookies), refreshed: Date.now() })
+        );
+      } catch (e) {
+        if (e instanceof RiotError && e.code === "session_expired") {
+          note = `\n\nYour saved Riot login has expired. Reconnect at ${origin}/account.`;
+          await env.STORE.put("riot:" + userId, JSON.stringify({ ...rec, sealed: undefined, expired: Date.now() }));
+        } else {
+          note = `\n\nCould not refresh from Riot${e instanceof RiotError ? ": " + e.message : "."}`;
+        }
+      }
+    }
+  }
+  return render(snap, origin) + note;
 }
 
 // ---------- MCP (JSON-RPC over HTTP), behind OAuth ----------
@@ -155,8 +186,7 @@ async function rpc(msg, userId, env, origin) {
       return ok({ tools: [TOOL] });
     case "tools/call": {
       if (params?.name !== TOOL.name) return err(-32602, "Unknown tool");
-      const raw = await env.STORE.get("snap:" + userId);
-      return ok({ content: [{ type: "text", text: render(raw ? JSON.parse(raw) : null, origin) }] });
+      return ok({ content: [{ type: "text", text: await getStoreText(env, userId, origin) }] });
     }
     default:
       return err(-32601, "Method not found");
@@ -230,14 +260,24 @@ async function handlePush(request, env) {
   return new Response("ok");
 }
 
-// ---------- /account: GitHub sign-in to mint the PC push key ----------
+// ---------- /account: GitHub sign-in, then a small dashboard ----------
 
 const ACCT_COOKIE = "__Host-vs-acct";
+const SESS_COOKIE = "__Host-vs-sess";
 const cookieOf = (request, name) =>
   (request.headers.get("Cookie") || "")
     .split(/;\s*/)
     .map((c) => c.split("="))
     .find(([k]) => k === name)?.[1];
+const setCookie = (name, value, maxAge) =>
+  `${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+
+async function getSession(request, env) {
+  const id = cookieOf(request, SESS_COOKIE);
+  if (!id) return null;
+  const s = await env.STORE.get("sess:" + id, "json");
+  return s ? { id, ...s } : null;
+}
 
 async function startAccount(request, env) {
   const origin = new URL(request.url).origin;
@@ -246,15 +286,14 @@ async function startAccount(request, env) {
   await env.STORE.put("acct:" + id, verifier, { expirationTtl: 600 });
   const headers = new Headers({
     Location: githubAuthorizeUrl(env, origin, "acct_" + id, await s256(verifier)),
-    "Set-Cookie": `${ACCT_COOKIE}=${id}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=600`,
+    "Set-Cookie": setCookie(ACCT_COOKIE, id, 600),
   });
   return new Response(null, { status: 302, headers });
 }
 
 async function finishAccount(request, env, url, state) {
-  const origin = url.origin;
   const id = state.slice(5);
-  const clear = new Headers({ "Set-Cookie": `${ACCT_COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0` });
+  const clear = new Headers({ "Set-Cookie": setCookie(ACCT_COOKIE, "", 0) });
   const verifier = await env.STORE.get("acct:" + id);
   await env.STORE.delete("acct:" + id);
   if (!verifier || cookieOf(request, ACCT_COOKIE) !== id) {
@@ -263,27 +302,151 @@ async function finishAccount(request, env, url, state) {
   if (url.searchParams.get("error") || !url.searchParams.get("code")) {
     return page("Sign-in cancelled", `<p>Start again at <a href="/account">/account</a>.</p>`, 400, clear);
   }
-  const user = await githubUser(env, origin, url.searchParams.get("code"), verifier);
+  const user = await githubUser(env, url.origin, url.searchParams.get("code"), verifier);
   if (!isAllowed(env, user.login)) return notAllowed(user.login, clear);
 
-  // A new key replaces the old one.
+  const sid = randHex(24);
+  await env.STORE.put(
+    "sess:" + sid,
+    JSON.stringify({ userId: user.id, login: user.login, csrf: randHex(16) }),
+    { expirationTtl: 3600 }
+  );
+  const headers = new Headers({ Location: "/account" });
+  headers.append("Set-Cookie", setCookie(ACCT_COOKIE, "", 0));
+  headers.append("Set-Cookie", setCookie(SESS_COOKIE, sid, 3600));
+  return new Response(null, { status: 302, headers });
+}
+
+async function dashboard(env, sess, origin, flash = "") {
+  const [user, riot, snap] = await Promise.all([
+    env.STORE.get("user:" + sess.userId, "json"),
+    env.STORE.get("riot:" + sess.userId, "json"),
+    env.STORE.get("snap:" + sess.userId, "json"),
+  ]);
+  const ago = (ms) => `${fmtDur(Date.now() - ms)} ago`;
+  const riotStatus = !riot
+    ? "Not connected."
+    : riot.sealed
+      ? `Staying logged in (connected ${ago(riot.connected)}).`
+      : riot.expired
+        ? "The saved login expired. Reconnect below."
+        : `Connected once, ${ago(riot.connected)}. It will not refresh by itself.`;
+  const snapStatus = snap ? `Last store snapshot: ${ago(snap.fetched_at * 1000)}.` : "No store snapshot yet.";
+  const csrf = `<input type="hidden" name="csrf" value="${esc(sess.csrf)}">`;
+  const stay = env.RIOT_ENCRYPTION_KEY
+    ? `<details><summary>Stay logged in (optional)</summary>
+<p>Paste your Riot login cookies (<code>ssid</code> is required) from auth.riotgames.com, for example
+<code>ssid=...; clid=...; csid=...; tdid=...</code>. Find them in your browser's developer tools under Application or Storage, then Cookies.
+They are saved encrypted and only used when you ask Claude for your store and today's snapshot is out of date.
+They usually last 1 to 3 weeks before you need to reconnect. Anyone with these cookies can act as your Riot account,
+so only turn this on if you trust whoever runs this server.</p>
+<label><input type="checkbox" name="stay" value="1"> Keep me logged in</label>
+<textarea name="cookies" rows="3" style="width:100%" placeholder="ssid=...; clid=...; csid=...; tdid=..."></textarea>
+</details>`
+    : "";
+
+  return page(
+    "Valorant store",
+    `<p>Signed in as <strong>${esc(sess.login)}</strong>. ${esc(snapStatus)}</p>
+${flash ? `<p><strong>${esc(flash)}</strong></p>` : ""}
+<h2>Option A: Riot login (no PC needed)</h2>
+<p>${esc(riotStatus)}</p>
+<ol>
+<li><a href="${esc(RIOT_LOGIN_URL)}" target="_blank" rel="noopener noreferrer">Log in on Riot's own page</a>. This site never sees your password.</li>
+<li>You land on a page that looks empty or broken. Copy the full address from the address bar.</li>
+<li>Paste it here.</li>
+</ol>
+<form method="post" action="/account/riot">${csrf}
+<textarea name="paste" rows="3" style="width:100%" placeholder="https://playvalorant.com/opt_in#access_token=..."></textarea>
+${stay}
+<p><button>Get my store</button></p>
+</form>
+<h2>Option B: PC script</h2>
+<p>${user?.pk_hash ? "A PC key exists." : "No PC key yet."} Creating a new key replaces the old one.</p>
+<form method="post" action="/account/pc-key">${csrf}<button>Create PC key</button></form>
+${riot || snap ? `<h2>Disconnect</h2><form method="post" action="/account/disconnect">${csrf}<button>Delete my Riot connection and snapshot</button></form>` : ""}`
+  );
+}
+
+async function mintPcKey(env, sess, origin) {
   const key = "vs_" + randHex(24);
   const hash = await sha256(key);
-  const prev = await env.STORE.get("user:" + user.id, "json");
+  const prev = await env.STORE.get("user:" + sess.userId, "json");
   if (prev?.pk_hash) await env.STORE.delete("pk:" + prev.pk_hash);
-  await env.STORE.put("pk:" + hash, user.id);
-  await env.STORE.put("user:" + user.id, JSON.stringify({ login: user.login, pk_hash: hash, updated: Date.now() }));
-
+  await env.STORE.put("pk:" + hash, sess.userId);
+  await env.STORE.put("user:" + sess.userId, JSON.stringify({ login: sess.login, pk_hash: hash, updated: Date.now() }));
   const cfg = JSON.stringify({ worker_url: origin, key }, null, 2);
   return page(
     "PC setup key",
-    `<p>Signed in as <strong>${esc(user.login)}</strong>.</p>
-<p>Save this as <code>config.json</code> next to <code>push_store.py</code> on your PC. It is shown once, and signing in here again replaces it.</p>
+    `<p>Save this as <code>config.json</code> next to <code>push_store.py</code> on your PC. It is shown once.</p>
 <pre>${esc(cfg)}</pre>
-<p>Then run <code>python push_store.py</code> with the Riot Client open, and <code>setup_task.ps1</code> to keep it updated.</p>`,
-    200,
-    clear
+<p>Then run <code>python push_store.py</code> with the Riot Client open, and <code>setup_task.ps1</code> to keep it updated.</p>
+<p><a href="/account">Back</a></p>`
   );
+}
+
+async function connectRiot(env, sess, form, origin) {
+  const uid = sess.userId;
+  let tokens = parseTokens(String(form.get("paste") || ""));
+  let sealed = null;
+  let warn = "";
+
+  if (form.get("stay") === "1") {
+    if (!env.RIOT_ENCRYPTION_KEY) {
+      warn = " Staying logged in is not enabled on this server.";
+    } else {
+      const cookies = parseCookies(String(form.get("cookies") || ""));
+      if (!cookies) {
+        warn = " Staying logged in needs the ssid cookie, so it was not turned on.";
+      } else {
+        try {
+          const r = await reauth(cookies);
+          sealed = await seal(env.RIOT_ENCRYPTION_KEY, r.cookies);
+          if (!tokens) tokens = r.tokens;
+        } catch {
+          warn = " Those cookies did not work (expired or incomplete), so staying logged in was not turned on.";
+        }
+      }
+    }
+  }
+
+  if (!tokens) {
+    return dashboard(env, sess, origin, "Nothing usable was pasted. Copy the whole address after logging in, it contains access_token=." + warn);
+  }
+
+  let result;
+  try {
+    result = await fetchSnapshot(env, tokens);
+  } catch (e) {
+    return dashboard(env, sess, origin, (e instanceof RiotError ? e.message : "Could not read the store.") + warn);
+  }
+
+  await env.STORE.put("snap:" + uid, JSON.stringify(result.snapshot));
+  const rec = { puuid: result.puuid, shard: result.shard, connected: Date.now() };
+  if (sealed) rec.sealed = sealed;
+  await env.STORE.put("riot:" + uid, JSON.stringify(rec));
+  return dashboard(env, sess, origin, "Done. Ask Claude for your Valorant store." + warn);
+}
+
+async function accountPost(request, env, url) {
+  const sess = await getSession(request, env);
+  if (!sess) return page("Signed out", `<p><a href="/account">Sign in again</a>.</p>`, 401);
+  const form = await request.formData();
+  if (form.get("csrf") !== sess.csrf) {
+    return page("Bad request", `<p>The session check failed. Reload <a href="/account">/account</a>.</p>`, 400);
+  }
+  switch (url.pathname) {
+    case "/account/pc-key":
+      return mintPcKey(env, sess, url.origin);
+    case "/account/riot":
+      return connectRiot(env, sess, form, url.origin);
+    case "/account/disconnect":
+      await env.STORE.delete("riot:" + sess.userId);
+      await env.STORE.delete("snap:" + sess.userId);
+      return dashboard(env, sess, url.origin, "Disconnected. Your Riot connection and store snapshot were deleted.");
+    default:
+      return new Response("not found", { status: 404 });
+  }
 }
 
 // ---------- OAuth for Claude: consent, then GitHub ----------
@@ -366,7 +529,7 @@ const home = (origin) =>
     `<p>Ask Claude what is in your Valorant store, from any device.</p>
 <ol>
 <li>In Claude, add a custom connector with the URL <code>${esc(origin)}/mcp</code> and sign in with GitHub.</li>
-<li>Get your PC setup key at <a href="/account">/account</a>.</li>
+<li>Connect your Riot account at <a href="/account">/account</a>, with a Riot login or the PC script.</li>
 </ol>`
   );
 
@@ -379,7 +542,11 @@ const defaultHandler = {
         if (request.method === "POST") return await authorizePost(request, env);
       }
       if (url.pathname === "/callback" && request.method === "GET") return await callback(request, env);
-      if (url.pathname === "/account" && request.method === "GET") return await startAccount(request, env);
+      if (url.pathname === "/account" && request.method === "GET") {
+        const sess = await getSession(request, env);
+        return sess ? await dashboard(env, sess, url.origin) : await startAccount(request, env);
+      }
+      if (url.pathname.startsWith("/account/") && request.method === "POST") return await accountPost(request, env, url);
       if (url.pathname === "/push" && request.method === "POST") return await handlePush(request, env);
       if (url.pathname === "/") return home(url.origin);
       return new Response("not found", { status: 404 });

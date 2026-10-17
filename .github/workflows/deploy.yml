@@ -13,6 +13,8 @@ concurrency: deploy
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      HAS_RIOT_KEY: ${{ secrets.RIOT_ENCRYPTION_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,3 +70,14 @@ jobs:
         env:
           GH_CLIENT_ID: ${{ secrets.GH_OAUTH_CLIENT_ID }}
           GH_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
+
+      # Optional: enables the "stay logged in" option for Riot login. Add a repository secret
+      # RIOT_ENCRYPTION_KEY (a long random string, 32+ characters) and keep it stable.
+      - name: Set optional Riot encryption key
+        if: env.HAS_RIOT_KEY == 'true'
+        working-directory: worker
+        env:
+          RIOT_ENCRYPTION_KEY: ${{ secrets.RIOT_ENCRYPTION_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: printf '%s' "$RIOT_ENCRYPTION_KEY" | npx wrangler secret put RIOT_ENCRYPTION_KEY
