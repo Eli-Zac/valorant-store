@@ -16,6 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: worker
+        run: npm ci
+
       # Finds the "valorant-store" KV namespace in your account (or creates it)
       # and writes its ID into wrangler.toml for this run only.
       - name: Find or create KV namespace
@@ -25,16 +33,28 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           find_id() {
-            npx --yes wrangler@4 kv namespace list \
+            npx wrangler kv namespace list \
               | jq -r '[.[] | select(.title | endswith("valorant-store"))][0].id // empty'
           }
           ID=$(find_id)
           if [ -z "$ID" ]; then
-            npx --yes wrangler@4 kv namespace create valorant-store
+            npx wrangler kv namespace create valorant-store
             ID=$(find_id)
           fi
           test -n "$ID" || { echo "Could not find or create the KV namespace"; exit 1; }
-          sed -i "s/REPLACE_WITH_KV_NAMESPACE_ID/$ID/" wrangler.toml
+          sed -i "s/REPLACE_WITH_KV_NAMESPACE_ID/$ID/g" wrangler.toml
+
+      # Optional: set a repository variable ALLOWED_GITHUB_USERS (comma-separated GitHub
+      # usernames) to restrict who can sign in. Leave it unset to allow any GitHub user.
+      - name: Apply optional allow list
+        if: ${{ vars.ALLOWED_GITHUB_USERS != '' }}
+        env:
+          ALLOWED: ${{ vars.ALLOWED_GITHUB_USERS }}
+        run: |
+          case "$ALLOWED" in
+            *[!A-Za-z0-9,-]*) echo "ALLOWED_GITHUB_USERS may only contain letters, digits, hyphens and commas"; exit 1 ;;
+          esac
+          printf '\n[vars]\nALLOWED_USERS = "%s"\n' "$ALLOWED" >> worker/wrangler.toml
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v3
@@ -43,6 +63,8 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
           secrets: |
-            ADMIN_TOKEN
+            GH_CLIENT_ID
+            GH_CLIENT_SECRET
         env:
-          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          GH_CLIENT_ID: ${{ secrets.GH_OAUTH_CLIENT_ID }}
+          GH_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
