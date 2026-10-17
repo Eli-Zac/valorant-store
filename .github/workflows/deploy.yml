@@ -13,6 +13,8 @@ concurrency: deploy
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      HAS_RIOT_KEY: ${{ secrets.RIOT_ENCRYPTION_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -72,7 +74,7 @@ jobs:
       # Optional: enables the "stay logged in" option for Riot login. Add a repository secret
       # RIOT_ENCRYPTION_KEY (a long random string, 32+ characters) and keep it stable.
       - name: Set optional Riot encryption key
-        if: ${{ env.RIOT_ENCRYPTION_KEY != '' }}
+        if: env.HAS_RIOT_KEY == 'true'
         working-directory: worker
         env:
           RIOT_ENCRYPTION_KEY: ${{ secrets.RIOT_ENCRYPTION_KEY }}
