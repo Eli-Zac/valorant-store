@@ -10,15 +10,16 @@ Each person has their own key, so everyone sees only their own store. Riot login
 
 ## 1. Deploy the Worker (once, you)
 
-```
-cd worker
-npx wrangler login
-npx wrangler kv namespace create valorant-store   # copy the id it prints into wrangler.toml
-npx wrangler secret put ADMIN_TOKEN               # pick a long random value, keep it private
-npx wrangler deploy
-```
+Deployment runs from GitHub Actions, so there is nothing to edit.
 
-This prints the Worker URL, like `https://valorant-store-mcp.<subdomain>.workers.dev`.
+1. Fork this repo (or use your own copy).
+2. In the repo, go to Settings > Secrets and variables > Actions and add:
+   - `CLOUDFLARE_API_TOKEN`: create one from the "Edit Cloudflare Workers" template
+   - `CLOUDFLARE_ACCOUNT_ID`: your Cloudflare account ID
+   - `ADMIN_TOKEN`: a long random value you keep private
+3. Go to Actions > Deploy Worker > Run workflow. It finds or creates the KV namespace, sets the admin token and deploys.
+
+The Worker URL is printed in the deploy log, like `https://valorant-store-mcp.<subdomain>.workers.dev`. Later pushes to `worker/` redeploy automatically.
 
 ## 2. Add a person (you)
 

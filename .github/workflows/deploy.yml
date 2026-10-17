@@ -1,0 +1,48 @@
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+concurrency: deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Finds the "valorant-store" KV namespace in your account (or creates it)
+      # and writes its ID into wrangler.toml for this run only.
+      - name: Find or create KV namespace
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          find_id() {
+            npx --yes wrangler@4 kv namespace list \
+              | jq -r '[.[] | select(.title | endswith("valorant-store"))][0].id // empty'
+          }
+          ID=$(find_id)
+          if [ -z "$ID" ]; then
+            npx --yes wrangler@4 kv namespace create valorant-store
+            ID=$(find_id)
+          fi
+          test -n "$ID" || { echo "Could not find or create the KV namespace"; exit 1; }
+          sed -i "s/REPLACE_WITH_KV_NAMESPACE_ID/$ID/" wrangler.toml
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          secrets: |
+            ADMIN_TOKEN
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
