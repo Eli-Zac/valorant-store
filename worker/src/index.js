@@ -335,13 +335,18 @@ async function dashboard(env, sess, origin, flash = "") {
   const csrf = `<input type="hidden" name="csrf" value="${esc(sess.csrf)}">`;
   const stay = env.RIOT_ENCRYPTION_KEY
     ? `<details><summary>Stay logged in (optional)</summary>
-<p>Paste your Riot login cookies (<code>ssid</code> is required) from auth.riotgames.com, for example
-<code>ssid=...; clid=...; csid=...; tdid=...</code>. Find them in your browser's developer tools under Application or Storage, then Cookies.
+<p>Paste the <em>value</em> of each Riot login cookie from auth.riotgames.com. <code>ssid</code> is required, the others make it last longer.
+Find them in your browser's developer tools under Application or Storage, then Cookies.
 They are saved encrypted and only used when you ask Claude for your store and today's snapshot is out of date.
 They usually last 1 to 3 weeks before you need to reconnect. Anyone with these cookies can act as your Riot account,
 so only turn this on if you trust whoever runs this server.</p>
 <label><input type="checkbox" name="stay" value="1"> Keep me logged in</label>
-<textarea name="cookies" rows="3" style="width:100%" placeholder="ssid=...; clid=...; csid=...; tdid=..."></textarea>
+${["ssid", "clid", "csid", "tdid"]
+  .map(
+    (n) =>
+      `<p><label>${n}${n === "ssid" ? " (required)" : ""}<br><input type="password" name="cookie_${n}" autocomplete="off" spellcheck="false" style="width:100%"></label></p>`
+  )
+  .join("\n")}
 </details>`
     : "";
 
@@ -395,7 +400,13 @@ async function connectRiot(env, sess, form, origin) {
     if (!env.RIOT_ENCRYPTION_KEY) {
       warn = " Staying logged in is not enabled on this server.";
     } else {
-      const cookies = parseCookies(String(form.get("cookies") || ""));
+      const cookies = parseCookies(
+        ["ssid", "clid", "csid", "tdid"]
+          .map((n) => [n, String(form.get("cookie_" + n) || "").trim()])
+          .filter(([, v]) => v)
+          .map(([n, v]) => `${n}=${v}`)
+          .join("; ")
+      );
       if (!cookies) {
         warn = " Staying logged in needs the ssid cookie, so it was not turned on.";
       } else {
