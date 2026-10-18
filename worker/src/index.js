@@ -209,7 +209,7 @@ dialog.vid .x:hover{color:var(--red)}dialog.vid .x:focus-visible{outline:2px sol
 .sw:hover{border-color:rgba(236,232,225,.5)}.sw.on{border-color:var(--tier,#ece8e1)}.sw:focus-visible{outline:2px solid #fff;outline-offset:1px}
 .sw img,.sw span{width:18px;height:18px;object-fit:cover;display:block}
 .skin.accy{--tier:#4d6a8f;box-shadow:inset 0 3px 0 var(--tier)}
-.accy .art img{width:100%;height:100%;object-fit:contain}
+.accy .art img{position:absolute;inset:1rem;width:calc(100% - 2rem);height:calc(100% - 2rem);object-fit:contain}
 .accy .art.txt span{font:700 1.3rem/1.15 var(--display);letter-spacing:.08em;text-transform:uppercase;text-align:center;color:rgba(236,232,225,.9)}
 .stale .skin{opacity:.5;filter:saturate(.4)}
 @media(min-width:46rem){.skins{grid-template-columns:repeat(4,minmax(0,1fr))}.skins.nm{grid-template-columns:repeat(3,minmax(0,1fr))}}
