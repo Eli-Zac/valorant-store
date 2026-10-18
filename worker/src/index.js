@@ -4,7 +4,7 @@
 //
 // - /mcp        the MCP endpoint (needs an OAuth access token, issued by this Worker)
 // - /authorize  consent page, then Discord sign-in (handled via @cloudflare/workers-oauth-provider)
-// - /account    the web app: sign in with Discord, link Riot accounts, see your store
+// - /store      the web app: sign in with Discord, see your store (/account/* has Accounts and Add-ons)
 
 import OAuthProvider, {
   AuthorizationError,
@@ -208,14 +208,14 @@ document.querySelectorAll("[data-end]").forEach(function(e){var l=e.getAttribute
 t();setInterval(t,1e3)})();`;
 
 const TABS = [
-  ["store", "Store", "/account"],
+  ["store", "Store", "/store"],
   ["accounts", "Accounts", "/account/accounts"],
   ["addons", "Add-ons", "/account/addons"],
 ];
 
 function navHtml(n) {
-  const brand = `<a class="brand" href="${n ? "/account" : "/"}"><span class="mark"></span>Valorant Store</a>`;
-  if (!n) return `<nav><div>${brand}<a class="btn sm" href="/account">Sign in</a></div></nav>`;
+  const brand = `<a class="brand" href="${n ? "/store" : "/"}"><span class="mark"></span>Valorant Store</a>`;
+  if (!n) return `<nav><div>${brand}<a class="btn sm" href="/store">Sign in</a></div></nav>`;
   const tabs = TABS.map(
     ([k, label, href]) => `<a class="tab${n.tab === k ? " on" : ""}" href="${href}"${n.tab === k ? ' aria-current="page"' : ""}>${label}</a>`
   ).join("");
@@ -309,7 +309,7 @@ function render(snap, origin) {
   if (!snap) {
     return (
       "No store data yet. Connect your Riot account at " +
-      `${origin}/account and then ask again.`
+      `${origin}/store and then ask again.`
     );
   }
   const now = Date.now();
@@ -317,7 +317,7 @@ function render(snap, origin) {
   const lines = [];
   if (now > snap.daily_ends_at * 1000) {
     lines.push(
-      `Warning: this snapshot is stale (taken ${fmtDur(ageMs)} ago and the store has rotated since). Open ${origin}/account to refresh it.`
+      `Warning: this snapshot is stale (taken ${fmtDur(ageMs)} ago and the store has rotated since). Open ${origin}/store to refresh it.`
     );
   } else {
     lines.push(`Daily store, rotates in ${fmtDur(snap.daily_ends_at * 1000 - now)} (snapshot ${fmtDur(ageMs)} old):`);
@@ -501,7 +501,7 @@ const mcpHandler = {
   },
 };
 
-// ---------- /account: Discord sign-in, then the web app ----------
+// ---------- /store and /account/*: Discord sign-in, then the web app ----------
 
 const ACCT_COOKIE = "__Host-vs-acct";
 const SESS_COOKIE = "__Host-vs-sess";
@@ -537,10 +537,10 @@ async function finishAccount(request, env, url, state) {
   const pending = await env.STORE.get("acct:" + id);
   await env.STORE.delete("acct:" + id);
   if (!pending || cookieOf(request, ACCT_COOKIE) !== id) {
-    return page("Sign-in expired", `<p>Start again at <a href="/account">/account</a>.</p>`, 400, clear);
+    return page("Sign-in expired", `<p>Start again at <a href="/store">/store</a>.</p>`, 400, clear);
   }
   if (url.searchParams.get("error") || !url.searchParams.get("code")) {
-    return page("Sign-in cancelled", `<p>Start again at <a href="/account">/account</a>.</p>`, 400, clear);
+    return page("Sign-in cancelled", `<p>Start again at <a href="/store">/store</a>.</p>`, 400, clear);
   }
   const user = await discordUser(env, url.origin, url.searchParams.get("code"));
   if (!isAllowed(env, user)) return notAllowed(user.login, clear);
@@ -551,7 +551,7 @@ async function finishAccount(request, env, url, state) {
     JSON.stringify({ userId: user.id, login: user.login, csrf: randHex(16) }),
     { expirationTtl: 3600 }
   );
-  const headers = new Headers({ Location: "/account" });
+  const headers = new Headers({ Location: "/store" });
   headers.append("Set-Cookie", setCookie(ACCT_COOKIE, "", 0));
   headers.append("Set-Cookie", setCookie(SESS_COOKIE, sid, 3600));
   return new Response(null, { status: 302, headers });
@@ -627,7 +627,7 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
   const chips = `<div class="accts">${accs
     .map(
       (a, i) =>
-        `<a class="chip${i === idx ? " on" : ""}" href="/account?acc=${esc(a.puuid)}"${i === idx ? ' aria-current="true"' : ""}>${esc(acctName(a, i))}</a>`
+        `<a class="chip${i === idx ? " on" : ""}" href="/store?acc=${esc(a.puuid)}"${i === idx ? ' aria-current="true"' : ""}>${esc(acctName(a, i))}</a>`
     )
     .join("")}${accs.length < MAX_ACCOUNTS ? '<a class="chip add" href="/account/accounts">+ Add account</a>' : ""}</div>`;
 
@@ -701,7 +701,7 @@ async function accountsView(env, sess, origin, flash = "") {
 <div class="who2"><strong class="aname">${esc(acctName(a, i))}</strong><span class="sub">${esc(meta)}</span></div>
 <span class="badge ${tone}">${esc(label)}</span>
 <div class="acts">
-<a class="btn sec sm" href="/account?acc=${esc(a.puuid)}">View</a>
+<a class="btn sec sm" href="/store?acc=${esc(a.puuid)}">View</a>
 ${rec?.sealed ? `<form method="post" action="/account/refresh">${hid}<button class="sec sm">Refresh</button></form>` : ""}
 <form method="post" action="/account/remove" onsubmit="return confirm('Remove this account and its saved store?')">${hid}<button class="danger sm">Remove</button></form>
 </div>
@@ -862,10 +862,10 @@ async function connectRiot(env, sess, form, origin) {
 
 async function accountPost(request, env, url) {
   const sess = await getSession(request, env);
-  if (!sess) return page("Signed out", `<p><a href="/account">Sign in again</a>.</p>`, 401);
+  if (!sess) return page("Signed out", `<p><a href="/store">Sign in again</a>.</p>`, 401);
   const form = await request.formData();
   if (form.get("csrf") !== sess.csrf) {
-    return page("Bad request", `<p>The session check failed. Reload <a href="/account">/account</a>.</p>`, 400);
+    return page("Bad request", `<p>The session check failed. Reload <a href="/store">/store</a>.</p>`, 400);
   }
   // Account-specific actions name the account in a hidden "puuid" field; it must be one of this user's.
   const accs = await getAccounts(env, sess.userId);
@@ -934,7 +934,7 @@ function storeEmbed(name, r, origin) {
   const unix = (s) => Math.floor(Number(s));
   const lines = (items, extra = () => "") => items.map((s) => `**${s.name}**: ${vpText(s.vp)}${extra(s)}`).join("\n");
   if (now > snap.daily_ends_at * 1000) {
-    embed.description = `This snapshot is out of date (taken <t:${unix(snap.fetched_at)}:R>). Open ${origin}/account to refresh it.`;
+    embed.description = `This snapshot is out of date (taken <t:${unix(snap.fetched_at)}:R>). Open ${origin}/store to refresh it.`;
   } else {
     embed.description = `Resets <t:${unix(snap.daily_ends_at)}:R>`;
   }
@@ -1218,7 +1218,7 @@ const ghostCard = (i) => `<article class="skin ghost" style="--i:${i}">
 const landing = (origin) =>
   page(
     "Valorant Store",
-    `<div class="actions cta"><a class="btn orn" href="/account">Sign in with Discord</a><a class="btn sec" href="#features">See what you get</a></div>
+    `<div class="actions cta"><a class="btn orn" href="/store">Sign in with Discord</a><a class="btn sec" href="#features">See what you get</a></div>
 <p class="sub" style="margin:0 0 1.4rem">By signing in you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
 <ul class="trust">
 <li><strong>We never see your Riot password.</strong> You log in on Riot's own page.</li>
@@ -1294,7 +1294,10 @@ const defaultHandler = {
         if (request.method === "POST") return await authorizePost(request, env);
       }
       if (url.pathname === "/callback" && request.method === "GET") return await callback(request, env);
-      if (["/account", "/account/accounts", "/account/addons"].includes(url.pathname) && request.method === "GET") {
+      if (url.pathname === "/account" && request.method === "GET") {
+        return Response.redirect(url.origin + "/store" + url.search, 302);
+      }
+      if (["/store", "/account/accounts", "/account/addons"].includes(url.pathname) && request.method === "GET") {
         const sess = await getSession(request, env);
         if (!sess) return await startAccount(request, env);
         if (url.pathname === "/account/accounts") return await accountsView(env, sess, url.origin);
@@ -1308,7 +1311,7 @@ const defaultHandler = {
       if (url.pathname === "/privacy" && request.method === "GET") return privacyPage();
       if (url.pathname === "/terms" && request.method === "GET") return termsPage();
       if (url.pathname === "/") {
-        return (await getSession(request, env)) ? Response.redirect(url.origin + "/account", 302) : landing(url.origin);
+        return (await getSession(request, env)) ? Response.redirect(url.origin + "/store", 302) : landing(url.origin);
       }
       return new Response("not found", { status: 404 });
     } catch (error) {
