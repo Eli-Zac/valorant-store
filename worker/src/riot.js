@@ -14,6 +14,8 @@ export const RIOT_LOGIN_URL =
 
 const VP = "85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741";
 const KC = "85ca954a-41f2-ce94-9b45-8ca3dd39a00d";
+const RAD = "e59aa87c-4cbf-517a-5983-6e81511be9b7";
+const SKIN_LEVEL = "e7c63390-eda7-46e0-bb7a-a6abdacd2433";
 // Accessory item types -> where valorant-api.com describes them.
 const ACCESSORY = {
   "d5f120f8-ff8c-4aac-92ea-f2b5acbe9475": { type: "Spray", path: "sprays", icon: ["fullTransparentIcon", "displayIcon"] },
@@ -201,8 +203,36 @@ async function accessoryInfo(env, typeId, uuid) {
   return { name: uuid, type: kind.type, icon: null };
 }
 
+// Bundle name and art, cached for 30 days.
+async function bundleInfo(env, uuid) {
+  const cached = await env.STORE.get("bun1:" + uuid, "json");
+  if (cached) return cached;
+  try {
+    const d = (await (await fetch(`${VAPI}/v1/bundles/${uuid}`)).json())?.data;
+    if (d?.displayName) {
+      const info = { name: d.displayName, icon: d.displayIcon2 || d.displayIcon || null };
+      await env.STORE.put("bun1:" + uuid, JSON.stringify(info), { expirationTtl: 30 * 86400 });
+      return info;
+    }
+  } catch {}
+  return { name: "Bundle", icon: null };
+}
+
+// Item ids the account owns, per item type. Failures are ignored: ownership is a nice-to-have.
+async function ownedItems(shard, puuid, headers) {
+  const types = [SKIN_LEVEL, ...Object.keys(ACCESSORY)];
+  const lists = await Promise.all(
+    types.map((t) =>
+      riotJson(`${pdHost(shard)}/store/v1/entitlements/${puuid}/${t}`, { headers }, "owned items")
+        .then((r) => (r.Entitlements || []).map((e) => e.ItemID))
+        .catch(() => [])
+    )
+  );
+  return new Set(lists.flat().map((x) => String(x).toLowerCase()));
+}
+
 // Bump when the snapshot gains fields, so older saved snapshots get refreshed.
-export const SNAPSHOT_VERSION = 4;
+export const SNAPSHOT_VERSION = 5;
 
 // Reads the store with fresh tokens. Returns { snapshot, puuid, shard, name }. Tokens are not kept.
 export async function fetchSnapshot(env, tokens) {
@@ -252,9 +282,17 @@ export async function fetchSnapshot(env, tokens) {
   const panel = store.SkinsPanelLayout;
   if (!panel) throw new RiotError("riot_http", "Riot returned no store data.");
 
+  const [wallet, owned] = await Promise.all([
+    riotJson(`${pdHost(shard)}/store/v1/wallet/${puuid}`, { headers }, "wallet")
+      .then((r) => ({ vp: r.Balances?.[VP] ?? 0, rad: r.Balances?.[RAD] ?? 0, kc: r.Balances?.[KC] ?? 0 }))
+      .catch(() => null),
+    ownedItems(shard, puuid, headers),
+  ]);
+  const has = (id) => owned.has(String(id).toLowerCase());
+
   const offers = panel.SingleItemStoreOffers || (panel.SingleItemOffers || []).map((id) => ({ Rewards: [{ ItemID: id }], Cost: {} }));
   const daily = await Promise.all(
-    offers.map(async (o) => ({ ...(await skinInfo(env, o.Rewards[0].ItemID)), vp: o.Cost?.[VP] ?? 0 }))
+    offers.map(async (o) => ({ ...(await skinInfo(env, o.Rewards[0].ItemID)), vp: o.Cost?.[VP] ?? 0, owned: has(o.Rewards[0].ItemID) }))
   );
 
   let night_market = null;
@@ -267,6 +305,7 @@ export async function fetchSnapshot(env, tokens) {
           ...(await skinInfo(env, o.Offer.Rewards[0].ItemID)),
           vp: o.DiscountCosts?.[VP] ?? 0,
           discount: o.DiscountPercent,
+          owned: has(o.Offer.Rewards[0].ItemID),
         }))
       ),
     };
@@ -284,10 +323,45 @@ export async function fetchSnapshot(env, tokens) {
             ...(await accessoryInfo(env, reward.ItemTypeID, reward.ItemID)),
             kc: o.Offer?.Cost?.[KC] ?? 0,
             quantity: Number(reward.Quantity) || 1,
+            owned: has(reward.ItemID),
           };
         })
       ),
     };
+  }
+
+  let bundles = [];
+  try {
+    bundles = await Promise.all(
+      (store.FeaturedBundle?.Bundles || []).map(async (b) => {
+        const meta = await bundleInfo(env, b.DataAssetID);
+        const items = await Promise.all(
+          (b.Items || []).map(async (it) => {
+            const id = it.Item?.ItemID;
+            const type = it.Item?.ItemTypeID;
+            const base = type === SKIN_LEVEL ? await skinInfo(env, id) : await accessoryInfo(env, type, id);
+            return {
+              name: base.name,
+              type: base.type || "Skin",
+              icon: base.icon,
+              vp: it.DiscountedPrice ?? it.BasePrice ?? 0,
+              owned: has(id),
+            };
+          })
+        );
+        return {
+          name: meta.name,
+          icon: meta.icon,
+          ends_at: now + Number(b.DurationRemainingInSeconds),
+          vp: b.TotalDiscountedCost?.[VP] ?? b.TotalBaseCost?.[VP] ?? 0,
+          base_vp: b.TotalBaseCost?.[VP] ?? 0,
+          discount: Math.round(Number(b.TotalDiscountPercent) || 0),
+          items,
+        };
+      })
+    );
+  } catch {
+    bundles = [];
   }
 
   return {
@@ -301,6 +375,8 @@ export async function fetchSnapshot(env, tokens) {
       daily,
       night_market,
       accessories,
+      bundles,
+      wallet,
     },
   };
 }
