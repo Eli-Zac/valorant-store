@@ -129,7 +129,12 @@ nav .btn:hover{text-decoration:none}
 .stat .vpi{width:1.4rem;height:1.4rem}
 .strip .tools{margin-left:auto}
 .empty{max-width:40rem}
-.cta{margin:-1.25rem 0 3rem}
+.cta{margin:-1.25rem 0 1.5rem}
+.trust{list-style:none;margin:0 0 3rem;padding:0;display:flex;flex-wrap:wrap;gap:.7rem 2.2rem;color:var(--sub);font-size:15px;line-height:1.45}
+.trust li{position:relative;padding-left:1.45rem;max-width:23rem}
+.trust li::before{content:"";position:absolute;left:0;top:.5rem;width:.55rem;height:.55rem;background:var(--green);transform:rotate(45deg)}
+.trust strong{color:var(--text);font-weight:600}
+.trust.stack{flex-direction:column;flex-wrap:nowrap;margin:0 0 1rem}.trust.stack li{max-width:none}
 .star{grid-column:1/-1;background:linear-gradient(135deg,rgba(255,70,85,.16),transparent 55%),var(--card)}
 .star .copy{max-width:36rem;margin-bottom:0}
 .ghost .art{animation:pulse 1.8s ease-in-out infinite}.ghost:hover{transform:none}
@@ -637,6 +642,7 @@ ${["ssid", "clid", "csid", "tdid"]
 <li>You land on a page that looks empty or broken. Copy the full address from the address bar.</li>
 <li>Paste it here.</li>
 </ol>
+<p class="sub" style="margin:0 0 1rem">That address is used once to read your store, then discarded. Nothing from it is saved unless you turn on Stay logged in.</p>
 <form method="post" action="/account/riot">${csrf}
 <textarea name="paste" rows="3" placeholder="https://playvalorant.com/opt_in#access_token=..." aria-label="Address after logging in"></textarea>
 ${stay}
@@ -811,7 +817,11 @@ function consentPage(d, handle, headers) {
     `<section class="card narrow">
 <p>${origin} Access will be sent to <strong>${esc(d.redirectHost)}</strong>.</p>
 ${d.redirectIsLoopback ? `<p class="notice" style="background:var(--amber-bg)"><strong>This sends access to an app on your computer.</strong> Continue only if you just started signing in from it.</p>` : ""}
-<p class="sub">You will sign in with Discord next. Only your Discord username and id are used.</p>
+<ul class="trust stack">
+<li><strong>Claude can only read your store</strong> (skin names and prices). It never gets your Riot password or a way to log in as you.</li>
+<li><strong>You sign in with Discord next.</strong> We only get your username and ID, not your email, servers or messages.</li>
+<li>You can delete your Riot connection and saved store at any time from the Connect tab.</li>
+</ul>
 <form method="post">
 <input type="hidden" name="handle" value="${esc(handle)}">
 <div class="actions split"><button name="decision" value="approve">Allow</button><button name="decision" value="deny">Deny</button></div>
@@ -884,6 +894,11 @@ const landing = (origin) =>
   page(
     "Valorant Store",
     `<div class="actions cta"><a class="btn" href="/account">Sign in with Discord</a><a class="btn sec" href="#features">See what you get</a></div>
+<ul class="trust">
+<li><strong>We never see your Riot password.</strong> You log in on Riot's own page.</li>
+<li><strong>Discord shares your name and ID only.</strong> Not your email, servers or messages.</li>
+<li><strong>Delete it any time.</strong> Remove your Riot connection and saved store from the Connect tab.</li>
+</ul>
 
 <section class="sect" aria-label="Preview">
 <div class="skins">${[0, 1, 2, 3].map(ghostCard).join("")}</div>
@@ -920,6 +935,19 @@ const landing = (origin) =>
 <section class="card"><span class="stepno">02</span><h2>Link Riot</h2><p class="sub">Log in on Riot's own page, or run the PC script. This site never sees your password.</p></section>
 <section class="card"><span class="stepno">03</span><h2>Check your store</h2><p class="sub">Open it here on the web, or ask Claude through the MCP connector.</p></section>
 </div>
+</section>
+
+<section class="sect" id="privacy">
+<div class="head"><h2>Your data and safety</h2></div>
+<section class="card">
+<ul class="trust stack">
+<li><strong>Your Riot password stays with Riot.</strong> You log in on Riot's own page and paste back the address you land on. This site never sees the password.</li>
+<li><strong>Nothing from that login is kept.</strong> It is used once to read your store, then thrown away. All we save is your Discord ID and name, your Riot account ID and region, and your skin names, icons and prices.</li>
+<li><strong>"Stay logged in" is optional and off by default.</strong> If you turn it on, your Riot login cookies are saved encrypted and used only to refresh your store. The encryption key is a secret held by whoever runs this server, so only enable it if you trust them, or run your own copy.</li>
+<li><strong>Discord sign-in is minimal.</strong> We ask for your identity only: no email, no servers, no messages. Claude can only read your store, never your login.</li>
+<li><strong>It is open source.</strong> Read exactly what it does on <a href="https://github.com/Eli-Zac/valorant-store" target="_blank" rel="noopener noreferrer">GitHub</a>.</li>
+</ul>
+</section>
 </section>`,
     200,
     new Headers(),
