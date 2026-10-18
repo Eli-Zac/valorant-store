@@ -179,7 +179,7 @@ footer p{margin:0;max-width:34rem}
 .skins{display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr))}
 .skin{--cut:12px;position:relative;display:flex;flex-direction:column;background:#101820;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));animation:rise .6s var(--ease) both;animation-delay:calc(var(--i,0)*70ms)}
 .art{position:relative;aspect-ratio:16/10;display:grid;place-items:center;padding:1rem;overflow:hidden;
-background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 70%),linear-gradient(180deg,#39414a 0%,#3a3532 55%,#7a4a26 100%)}
+background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 70%),linear-gradient(180deg,#39414a 0%,color-mix(in srgb,var(--tier,#7a4a26) 30%,#2a2f36) 55%,color-mix(in srgb,var(--tier,#7a4a26) 75%,#101820) 100%)}
 .art img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 8px 10px rgba(0,0,0,.5));transition:transform .5s var(--ease)}
 .skin:hover .art img{transform:scale(1.07) rotate(-1.5deg)}
 .art.none::after{content:"";width:2.6rem;height:2.6rem;border:2px solid rgba(236,232,225,.22);transform:rotate(45deg)}
