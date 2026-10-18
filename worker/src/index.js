@@ -27,22 +27,104 @@ const esc = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
 
-function page(title, body, status = 200, headers = new Headers()) {
+const STYLE = `
+:root{color-scheme:light dark;
+--bg:#f5f5f7;--card:#fff;--text:#1d1d1f;--sub:#6e6e73;--line:rgba(0,0,0,.08);--fill:rgba(120,120,128,.12);
+--blue:#0071e3;--blue-h:#0077ed;--red:#d70015;--green:#1d7f37;--green-bg:rgba(52,199,89,.16);--red-bg:rgba(255,59,48,.12);--amber:#9a5b00;--amber-bg:rgba(255,159,10,.16);
+--nav:rgba(245,245,247,.72);--shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+--font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI Variable Text","Segoe UI",system-ui,Roboto,sans-serif;
+--spring:cubic-bezier(.32,.72,0,1)}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--text:#f5f5f7;--sub:#98989d;--line:rgba(255,255,255,.12);--fill:rgba(120,120,128,.24);
+--blue:#0a84ff;--blue-h:#409cff;--red:#ff453a;--green:#30d158;--green-bg:rgba(48,209,88,.18);--red-bg:rgba(255,69,58,.18);--amber:#ffb340;--amber-bg:rgba(255,159,10,.2);
+--nav:rgba(0,0,0,.66);--shadow:none}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font:400 17px/1.47 var(--font);letter-spacing:-.022em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+nav{position:sticky;top:0;z-index:10;background:var(--nav);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-bottom:.5px solid var(--line)}
+nav div{max-width:44rem;margin:0 auto;padding:0 1.25rem;height:3rem;display:flex;align-items:center;justify-content:space-between}
+nav a{color:var(--text);text-decoration:none;font-size:14px;letter-spacing:-.01em}
+nav a.brand{font-weight:600;display:flex;align-items:center;gap:.5rem}
+nav a.link{color:var(--sub);transition:color .2s}nav a.link:hover{color:var(--text)}
+.mark{width:1.25rem;height:1.25rem;border-radius:.4rem;background:linear-gradient(145deg,#ff5a5f,#d6213a);display:inline-block}
+main{max-width:44rem;margin:0 auto;padding:3.5rem 1.25rem 5rem}
+h1{font-size:clamp(2rem,6.5vw,3rem);line-height:1.08;letter-spacing:-.035em;font-weight:700;margin:0 0 .75rem;text-wrap:balance}
+.lead{font-size:clamp(1.05rem,2.6vw,1.3rem);line-height:1.4;color:var(--sub);letter-spacing:-.018em;margin:0 0 2.5rem;max-width:34rem;text-wrap:pretty}
+h2{font-size:1.4rem;line-height:1.2;letter-spacing:-.025em;font-weight:600;margin:0}
+p{margin:0 0 1rem}p:last-child{margin-bottom:0}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+strong{font-weight:600}
+.sub{color:var(--sub);font-size:15px;letter-spacing:-.016em}
+.card{background:var(--card);border-radius:1.25rem;padding:1.5rem;margin:0 0 1.25rem;box-shadow:var(--shadow);animation:rise .5s var(--spring) both}
+.card:nth-of-type(2){animation-delay:.05s}.card:nth-of-type(3){animation-delay:.1s}.card:nth-of-type(4){animation-delay:.15s}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+.head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem}
+.badge{display:inline-flex;align-items:center;gap:.4rem;font-size:13px;font-weight:500;letter-spacing:-.01em;padding:.2rem .65rem;border-radius:99px;background:var(--fill);color:var(--sub);white-space:nowrap}
+.badge::before{content:"";width:.45rem;height:.45rem;border-radius:50%;background:currentColor}
+.badge.ok{background:var(--green-bg);color:var(--green)}.badge.warn{background:var(--amber-bg);color:var(--amber)}.badge.bad{background:var(--red-bg);color:var(--red)}
+.steps{list-style:none;margin:0 0 1.25rem;padding:0;counter-reset:s}
+.steps li{counter-increment:s;position:relative;padding:0 0 .9rem 2.4rem}.steps li:last-child{padding-bottom:0}
+.steps li::before{content:counter(s);position:absolute;left:0;top:.1rem;width:1.55rem;height:1.55rem;border-radius:50%;background:var(--fill);color:var(--sub);font-size:13px;font-weight:600;display:grid;place-items:center;letter-spacing:0}
+.notice{background:var(--green-bg);color:var(--text);border-radius:1rem;padding:.9rem 1.1rem;margin:0 0 1.25rem;font-size:15px;animation:rise .4s var(--spring) both}
+.btn,button{font:inherit;font-size:16px;font-weight:500;letter-spacing:-.016em;line-height:1;display:inline-flex;align-items:center;justify-content:center;min-height:2.75rem;padding:0 1.35rem;border:0;border-radius:99px;background:var(--blue);color:#fff;cursor:pointer;text-decoration:none;transition:background .2s,transform .12s var(--spring),opacity .2s;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.btn:hover,button:hover{background:var(--blue-h);text-decoration:none}
+.btn:active,button:active{transform:scale(.97);transition-duration:.06s}
+.sec,button[value=deny]{background:var(--fill);color:var(--blue)}.sec:hover,button[value=deny]:hover{background:rgba(120,120,128,.2)}
+button.danger{background:var(--red-bg);color:var(--red)}button.danger:hover{background:rgba(255,59,48,.2)}
+.actions{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1.25rem}
+.actions.split{flex-direction:row-reverse;justify-content:flex-end}.actions.split button{flex:1 1 9rem}
+:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 55%,transparent);outline-offset:2px;border-radius:.5rem}
+button:focus-visible,.btn:focus-visible{border-radius:99px}
+textarea,input[type=password],input[type=text]{width:100%;font:inherit;font-size:16px;letter-spacing:-.016em;color:var(--text);background:var(--fill);border:1.5px solid transparent;border-radius:.85rem;padding:.75rem .95rem;transition:border-color .2s,background .2s;resize:vertical}
+textarea::placeholder,input::placeholder{color:var(--sub);opacity:.7}
+textarea:focus,input:focus{outline:0;border-color:var(--blue);background:var(--card)}
+label.f{display:block;font-size:14px;font-weight:500;color:var(--sub);margin:0 0 .85rem}label.f input{margin-top:.35rem}
+label.f em{font-style:normal;font-weight:400;opacity:.8}
+details{margin-top:1rem;border-top:.5px solid var(--line);padding-top:.25rem}
+summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:.7rem 0;font-weight:500;-webkit-user-select:none;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"";width:.55rem;height:.55rem;border-right:2px solid var(--sub);border-bottom:2px solid var(--sub);transform:rotate(45deg) translate(-2px,-2px);transition:transform .3s var(--spring)}
+details[open] summary::after{transform:rotate(225deg)}
+details .body{padding:.25rem 0 .5rem}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin:1rem 0;font-weight:500;cursor:pointer}
+.switch input{appearance:none;-webkit-appearance:none;flex:none;width:3.1rem;height:1.9rem;border-radius:99px;background:var(--fill);position:relative;cursor:pointer;transition:background .25s;margin:0}
+.switch input::after{content:"";position:absolute;top:2px;left:2px;width:calc(1.9rem - 4px);height:calc(1.9rem - 4px);border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.25);transition:transform .35s var(--spring)}
+.switch input:checked{background:#34c759}.switch input:checked::after{transform:translateX(1.2rem)}
+code{font:500 .86em ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;letter-spacing:0;background:var(--fill);padding:.15rem .4rem;border-radius:.4rem;word-break:break-all}
+pre{font:500 14px/1.55 ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;letter-spacing:0;background:var(--fill);border-radius:.9rem;padding:1rem 1.1rem;margin:0 0 1rem;overflow:auto}
+pre code{background:none;padding:0}
+.copy{display:flex;align-items:center;gap:.5rem;background:var(--fill);border-radius:.85rem;padding:.35rem .35rem .35rem 1rem;margin-top:.6rem}
+.copy code{background:none;padding:0;flex:1;min-width:0;font-size:14px}
+.copy button{min-height:2rem;padding:0 .9rem;font-size:14px;background:var(--card);color:var(--blue);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+em{font-style:normal;font-weight:500}
+@media(max-width:34rem){main{padding-top:2.25rem}.card{padding:1.2rem;border-radius:1.1rem}.head{align-items:flex-start;flex-direction:column;gap:.5rem}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:opacity .2s!important}.btn:active,button:active{transform:none}}
+@media(prefers-reduced-transparency:reduce){nav{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--bg)}}
+@media(prefers-contrast:more){.card{box-shadow:0 0 0 1px var(--text)}.sub,.lead{color:var(--text)}}
+`;
+
+const COPY_JS = `document.addEventListener("click",function(e){var b=e.target.closest("[data-copy]");if(!b)return;
+var t=b.getAttribute("data-copy"),o=b.textContent;
+(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent="Copied"},function(){b.textContent="Press Ctrl+C"});
+setTimeout(function(){b.textContent=o},1600)});`;
+
+// opts: { lead } is the subtitle under the heading (trusted HTML), { heading } overrides the h1 text.
+function page(title, body, status = 200, headers = new Headers(), opts = {}) {
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Cache-Control", "no-store");
   headers.set("Content-Security-Policy", "frame-ancestors 'none'");
   const html = `<!doctype html><html lang="en"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <title>${esc(title)}</title>
-<style>
-:root{color-scheme:light dark;font-family:system-ui,sans-serif}
-body{max-width:34rem;margin:3rem auto;padding:0 1rem;line-height:1.5}
-button{font:inherit;padding:.5rem 1rem;margin-right:.5rem;cursor:pointer}
-pre,code{background:rgba(127,127,127,.15);border-radius:4px}
-pre{padding:.75rem;overflow:auto}code{padding:.1rem .3rem}
-</style>
-<h1>${esc(title)}</h1>
-${body}</html>`;
+<style>${STYLE}</style>
+<nav><div><a class="brand" href="/"><span class="mark"></span>Valorant Store</a><a class="link" href="/account">Account</a></div></nav>
+<main>
+<h1>${esc(opts.heading ?? title)}</h1>
+${opts.lead ? `<p class="lead">${opts.lead}</p>` : ""}
+${body}
+</main>
+<script>${COPY_JS}</script></html>`;
   return new Response(html, { status, headers });
 }
 
@@ -324,52 +406,65 @@ async function dashboard(env, sess, origin, flash = "") {
     env.STORE.get("snap:" + sess.userId, "json"),
   ]);
   const ago = (ms) => `${fmtDur(Date.now() - ms)} ago`;
-  const riotStatus = !riot
-    ? "Not connected."
+  const [riotLabel, riotTone, riotText] = !riot
+    ? ["Not connected", "", "Log in with Riot to let Claude read your store."]
     : riot.sealed
-      ? `Staying logged in (connected ${ago(riot.connected)}).`
+      ? ["Staying logged in", "ok", `Connected ${ago(riot.connected)}. Your store refreshes itself when it rotates.`]
       : riot.expired
-        ? "The saved login expired. Reconnect below."
-        : `Connected once, ${ago(riot.connected)}. It will not refresh by itself.`;
+        ? ["Expired", "bad", "The saved login expired. Reconnect below."]
+        : ["Connected", "warn", `Connected once, ${ago(riot.connected)}. It will not refresh by itself.`];
   const snapStatus = snap ? `Last store snapshot: ${ago(snap.fetched_at * 1000)}.` : "No store snapshot yet.";
   const csrf = `<input type="hidden" name="csrf" value="${esc(sess.csrf)}">`;
   const stay = env.RIOT_ENCRYPTION_KEY
-    ? `<details><summary>Stay logged in (optional)</summary>
-<p>Paste the <em>value</em> of each Riot login cookie from auth.riotgames.com. <code>ssid</code> is required, the others make it last longer.
+    ? `<details>
+<summary>Stay logged in</summary>
+<div class="body">
+<p class="sub">Paste the <em>value</em> of each Riot login cookie from auth.riotgames.com. <code>ssid</code> is required, the others make it last longer.
 Find them in your browser's developer tools under Application or Storage, then Cookies.
 They are saved encrypted and only used when you ask Claude for your store and today's snapshot is out of date.
 They usually last 1 to 3 weeks before you need to reconnect. Anyone with these cookies can act as your Riot account,
 so only turn this on if you trust whoever runs this server.</p>
-<label><input type="checkbox" name="stay" value="1"> Keep me logged in</label>
+<label class="switch">Keep me logged in<input type="checkbox" name="stay" value="1"></label>
 ${["ssid", "clid", "csid", "tdid"]
   .map(
     (n) =>
-      `<p><label>${n}${n === "ssid" ? " (required)" : ""}<br><input type="password" name="cookie_${n}" autocomplete="off" spellcheck="false" style="width:100%"></label></p>`
+      `<label class="f">${n}${n === "ssid" ? " <em>(required)</em>" : ""}<input type="password" name="cookie_${n}" autocomplete="off" spellcheck="false"></label>`
   )
   .join("\n")}
+</div>
 </details>`
     : "";
 
   return page(
-    "Valorant store",
-    `<p>Signed in as <strong>${esc(sess.login)}</strong>. ${esc(snapStatus)}</p>
-${flash ? `<p><strong>${esc(flash)}</strong></p>` : ""}
-<h2>Option A: Riot login (no PC needed)</h2>
-<p>${esc(riotStatus)}</p>
-<ol>
+    "Your store",
+    `${flash ? `<div class="notice" role="status"${/^(Done|Disconnected)/.test(flash) ? "" : " style=\"background:var(--amber-bg)\""}>${esc(flash)}</div>` : ""}
+<section class="card">
+<div class="head"><h2>Riot login</h2><span class="badge ${riotTone}">${esc(riotLabel)}</span></div>
+<p class="sub">${esc(riotText)}</p>
+<ol class="steps">
 <li><a href="${esc(RIOT_LOGIN_URL)}" target="_blank" rel="noopener noreferrer">Log in on Riot's own page</a>. This site never sees your password.</li>
 <li>You land on a page that looks empty or broken. Copy the full address from the address bar.</li>
 <li>Paste it here.</li>
 </ol>
 <form method="post" action="/account/riot">${csrf}
-<textarea name="paste" rows="3" style="width:100%" placeholder="https://playvalorant.com/opt_in#access_token=..."></textarea>
+<textarea name="paste" rows="3" placeholder="https://playvalorant.com/opt_in#access_token=..." aria-label="Address after logging in"></textarea>
 ${stay}
-<p><button>Get my store</button></p>
+<div class="actions"><button>Get my store</button></div>
 </form>
-<h2>Option B: PC script</h2>
-<p>${user?.pk_hash ? "A PC key exists." : "No PC key yet."} Creating a new key replaces the old one.</p>
-<form method="post" action="/account/pc-key">${csrf}<button>Create PC key</button></form>
-${riot || snap ? `<h2>Disconnect</h2><form method="post" action="/account/disconnect">${csrf}<button>Delete my Riot connection and snapshot</button></form>` : ""}`
+</section>
+<section class="card">
+<div class="head"><h2>PC script</h2><span class="badge ${user?.pk_hash ? "ok" : ""}">${user?.pk_hash ? "Key created" : "No key"}</span></div>
+<p class="sub">Run a small script on your PC to push your store here. Creating a new key replaces the old one.</p>
+<form method="post" action="/account/pc-key">${csrf}<div class="actions"><button class="sec">Create PC key</button></div></form>
+</section>
+${riot || snap ? `<section class="card">
+<div class="head"><h2>Disconnect</h2></div>
+<p class="sub">Deletes your saved Riot connection and store snapshot from this server.</p>
+<form method="post" action="/account/disconnect">${csrf}<div class="actions"><button class="danger">Delete my Riot connection and snapshot</button></div></form>
+</section>` : ""}`,
+    200,
+    new Headers(),
+    { lead: `Signed in as <strong>${esc(sess.login)}</strong>. ${esc(snapStatus)}` }
   );
 }
 
@@ -383,10 +478,13 @@ async function mintPcKey(env, sess, origin) {
   const cfg = JSON.stringify({ worker_url: origin, key }, null, 2);
   return page(
     "PC setup key",
-    `<p>Save this as <code>config.json</code> next to <code>push_store.py</code> on your PC. It is shown once.</p>
-<pre>${esc(cfg)}</pre>
-<p>Then run <code>python push_store.py</code> with the Riot Client open, and <code>setup_task.ps1</code> to keep it updated.</p>
-<p><a href="/account">Back</a></p>`
+    `<section class="card">
+<p>Save this as <code>config.json</code> next to <code>push_store.py</code> on your PC. It is shown once.</p>
+<pre><code>${esc(cfg)}</code></pre>
+<button type="button" class="sec" data-copy="${esc(cfg)}">Copy</button>
+<p class="sub" style="margin-top:1rem">Then run <code>python push_store.py</code> with the Riot Client open, and <code>setup_task.ps1</code> to keep it updated.</p>
+<div class="actions"><a class="btn" href="/account">Done</a></div>
+</section>`
   );
 }
 
@@ -468,13 +566,15 @@ function consentPage(d, handle, headers) {
     : "This app registered itself, so its name is not verified.";
   return page(
     `Allow ${d.clientName} to read your Valorant store?`,
-    `<p>${origin} Access will be sent to <strong>${esc(d.redirectHost)}</strong>.</p>
-${d.redirectIsLoopback ? "<p><strong>This sends access to an app on your computer.</strong> Continue only if you just started signing in from it.</p>" : ""}
-<p>You will sign in with GitHub next. Only your GitHub username and id are used.</p>
+    `<section class="card">
+<p>${origin} Access will be sent to <strong>${esc(d.redirectHost)}</strong>.</p>
+${d.redirectIsLoopback ? `<p class="notice" style="background:var(--amber-bg)"><strong>This sends access to an app on your computer.</strong> Continue only if you just started signing in from it.</p>` : ""}
+<p class="sub">You will sign in with GitHub next. Only your GitHub username and id are used.</p>
 <form method="post">
 <input type="hidden" name="handle" value="${esc(handle)}">
-<button name="decision" value="approve">Allow</button><button name="decision" value="deny">Deny</button>
-</form>`,
+<div class="actions split"><button name="decision" value="approve">Allow</button><button name="decision" value="deny">Deny</button></div>
+</form>
+</section>`,
     200,
     headers
   );
@@ -537,11 +637,18 @@ async function callback(request, env) {
 const home = (origin) =>
   page(
     "Valorant store connector",
-    `<p>Ask Claude what is in your Valorant store, from any device.</p>
-<ol>
-<li>In Claude, add a custom connector with the URL <code>${esc(origin)}/mcp</code> and sign in with GitHub.</li>
-<li>Connect your Riot account at <a href="/account">/account</a>, with a Riot login or the PC script.</li>
-</ol>`
+    `<section class="card">
+<div class="head"><h2>Set up in two steps</h2></div>
+<ol class="steps">
+<li>In Claude, add a custom connector with this URL and sign in with GitHub.
+<div class="copy"><code>${esc(origin)}/mcp</code><button type="button" data-copy="${esc(origin)}/mcp">Copy</button></div></li>
+<li>Connect your Riot account, with a Riot login or the PC script.</li>
+</ol>
+<div class="actions"><a class="btn" href="/account">Connect Riot account</a></div>
+</section>`,
+    200,
+    new Headers(),
+    { heading: "Your Valorant store, in Claude.", lead: "Ask Claude what is in your daily store or Night Market, from any device." }
   );
 
 const defaultHandler = {
