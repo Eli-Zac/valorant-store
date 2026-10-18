@@ -12,7 +12,7 @@ Everyone signs in with their own GitHub account and only sees their own store. T
 ## 1. Deploy the Worker (once, whoever hosts it)
 
 **Create a GitHub OAuth app** (GitHub > Settings > Developer settings > OAuth Apps > New):
-- Homepage URL: your Worker URL, for example `https://valorant-store-mcp.<subdomain>.workers.dev` (the Worker name is set in `worker/wrangler.toml`; changing it changes this URL)
+- Homepage URL: your Worker URL, for example `https://valorant-store.<subdomain>.workers.dev`, or your custom domain
 - Authorization callback URL: `<your Worker URL>/callback`
 - Copy the client ID and generate a client secret.
 

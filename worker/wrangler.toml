@@ -1,4 +1,4 @@
-name = "valorant-store-mcp"
+name = "valorant-store"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
 
