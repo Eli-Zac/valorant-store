@@ -208,6 +208,9 @@ dialog.vid .x:hover{color:var(--red)}dialog.vid .x:focus-visible{outline:2px sol
 .sw{all:unset;box-sizing:border-box;cursor:pointer;width:24px;height:24px;border:2px solid transparent;display:grid;place-items:center;transition:border-color .2s}
 .sw:hover{border-color:rgba(236,232,225,.5)}.sw.on{border-color:var(--tier,#ece8e1)}.sw:focus-visible{outline:2px solid #fff;outline-offset:1px}
 .sw img,.sw span{width:18px;height:18px;object-fit:cover;display:block}
+.skin.acc{--tier:#4d6a8f;box-shadow:inset 0 3px 0 var(--tier)}
+.acc .art img{width:100%;height:100%;object-fit:contain}
+.acc .art.txt span{font:700 1.3rem/1.15 var(--display);letter-spacing:.08em;text-transform:uppercase;text-align:center;color:rgba(236,232,225,.9)}
 .stale .skin{opacity:.5;filter:saturate(.4)}
 @media(min-width:46rem){.skins{grid-template-columns:repeat(4,minmax(0,1fr))}.skins.nm{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(min-width:84rem){.skins.nm{grid-template-columns:repeat(6,minmax(0,1fr))}}
@@ -698,7 +701,7 @@ ${tag}${variants}
 function accessoryCard(a, i) {
   const icon = safeIcon(a.icon);
   return `<article class="skin acc" style="--i:${i}">
-<div class="art${icon ? "" : " none"}">${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : ""}</div>
+<div class="art${icon ? "" : " txt"}">${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : `<span>${esc(a.name)}</span>`}</div>
 <div class="meta"><span class="nm">${esc(a.name)}</span><span class="vp"><img src="${KC_ICON}" alt="KC" width="16" height="16">${(Number(a.kc) || 0).toLocaleString("en-US")}</span></div>
 <div class="tags"><span class="lv">${esc(a.type)}</span></div>
 </article>`;
@@ -804,7 +807,7 @@ ${
   acLive
     ? `<section class="sect">
 <div class="head"><h2>Accessory store</h2><div class="tools"><span class="badge" data-end="${Number(ac.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(ac.ends_at * 1000 - now)}</span></div></div>
-<div class="skins nm">${ac.items.map((a, i) => accessoryCard(a, i)).join("")}</div>
+<div class="skins">${ac.items.map((a, i) => accessoryCard(a, i)).join("")}</div>
 </section>`
     : ""
 }`;
