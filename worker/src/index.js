@@ -922,6 +922,27 @@ const EPHEMERAL = 64;
 const reply = (content) => json({ type: 4, data: { content, flags: EPHEMERAL } });
 const vpText = (n) => `${(Number(n) || 0).toLocaleString("en-US")} VP`;
 
+// Discord shows one image per embed, but embeds that share a url are merged into one gallery. So the
+// daily skins go in as extra embeds with the same url as the main one. Discord allows 10 embeds a message.
+const MAX_EMBEDS = 10;
+
+function storeEmbeds(name, r, origin, index, gallery = true) {
+  const embed = storeEmbed(name, r, origin);
+  const snap = r.snap;
+  const icons = gallery && snap && Date.now() <= snap.daily_ends_at * 1000
+    ? (snap.daily || []).slice(0, 4).map((s) => safeIcon(s.icon))
+    : [];
+  if (!icons.some(Boolean)) return [embed];
+  const url = `${origin}/store?a=${index}`;
+  const out = [{ ...embed, url }];
+  icons.forEach((icon, i) => {
+    if (!icon) return;
+    if (!out[0].image) out[0].image = { url: icon };
+    else out.push({ url, image: { url: icon } });
+  });
+  return out;
+}
+
 function storeEmbed(name, r, origin) {
   const embed = { title: name, color: 0xff4655, fields: [] };
   const snap = r.snap;
@@ -958,9 +979,11 @@ async function storeCommand(env, interaction, userId, origin) {
   if (!picked.length) {
     return { content: `No linked Riot account matches "${opt.value}". Linked accounts: ${accs.map(acctName).join(", ")}.` };
   }
-  const embeds = await Promise.all(
-    picked.map(async ({ a, name }) => storeEmbed(name, await loadSnapshot(env, userId, a.puuid), origin))
+  const loaded = await Promise.all(
+    picked.map(async ({ a, name }) => ({ name, r: await loadSnapshot(env, userId, a.puuid) }))
   );
+  let embeds = loaded.flatMap(({ name, r }, i) => storeEmbeds(name, r, origin, i));
+  if (embeds.length > MAX_EMBEDS) embeds = loaded.map(({ name, r }) => storeEmbed(name, r, origin));
   return { embeds };
 }
 
