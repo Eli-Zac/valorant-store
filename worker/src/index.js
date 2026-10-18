@@ -193,7 +193,7 @@ background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 7
 .play:hover{background:var(--red)}.play:focus-visible{outline:2px solid #fff;outline-offset:1px}.play[hidden]{display:none}
 dialog.vid{border:0;padding:0;background:#000;width:min(60rem,92vw);max-height:88vh;overflow:visible}
 dialog.vid::backdrop{background:rgba(5,9,13,.82);backdrop-filter:blur(4px)}
-dialog.vid video{display:block;width:100%;max-height:88vh;background:#000}
+dialog.vid video{display:block;width:100%;aspect-ratio:16/9;max-height:88vh;background:#000}
 dialog.vid .x{all:unset;box-sizing:border-box;position:absolute;top:-2.6rem;right:0;width:2.2rem;height:2.2rem;display:grid;place-items:center;cursor:pointer;color:#ece8e1;font:400 1.8rem/1 var(--display);transition:color .2s}
 dialog.vid .x:hover{color:var(--red)}dialog.vid .x:focus-visible{outline:2px solid #fff;outline-offset:1px}
 .tags{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding:0 .95rem .6rem;font:600 .75rem/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:rgba(236,232,225,.7)}
