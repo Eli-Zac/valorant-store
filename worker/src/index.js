@@ -12,6 +12,7 @@ import OAuthProvider, {
   authorizationErrorRedirect,
 } from "@cloudflare/workers-oauth-provider";
 
+import { skinTile } from "./storeimage.js";
 import { RIOT_LOGIN_URL, RiotError, fetchSnapshot, parseCookies, parseTokens, reauth, seal, unseal } from "./riot.js";
 
 const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
@@ -924,7 +925,25 @@ const vpText = (n) => `${(Number(n) || 0).toLocaleString("en-US")} VP`;
 
 // Discord shows one image per embed, but embeds that share a url are merged into one gallery. So the
 // daily skins go in as extra embeds with the same url as the main one. Discord allows 10 embeds a message.
+// Each image is a square tile from /store-tile.png so the gallery's cropping cuts nothing off.
 const MAX_EMBEDS = 10;
+const ICON_BASE = "https://media.valorant-api.com/";
+const tileUrl = (icon, origin) => `${origin}/store-tile.png?u=${encodeURIComponent(icon.slice(ICON_BASE.length))}`;
+
+// Public, and only draws icons from media.valorant-api.com. The result is cached for a day.
+async function storeTileResponse(url, ctx) {
+  const path = url.searchParams.get("u") || "";
+  if (!/^[\w\/.-]{1,200}$/.test(path) || path.includes("..")) return new Response("not found", { status: 404 });
+  const cache = caches.default;
+  const key = new Request(url.origin + url.pathname + url.search);
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  const res = new Response(await skinTile(ICON_BASE + path), {
+    headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },
+  });
+  ctx.waitUntil(cache.put(key, res.clone()));
+  return res;
+}
 
 function storeEmbeds(name, r, origin, index, gallery = true) {
   const embed = storeEmbed(name, r, origin);
@@ -937,8 +956,9 @@ function storeEmbeds(name, r, origin, index, gallery = true) {
   const out = [{ ...embed, url }];
   icons.forEach((icon, i) => {
     if (!icon) return;
-    if (!out[0].image) out[0].image = { url: icon };
-    else out.push({ url, image: { url: icon } });
+    const image = { url: tileUrl(icon, origin) };
+    if (!out[0].image) out[0].image = image;
+    else out.push({ url, image });
   });
   return out;
 }
@@ -1311,6 +1331,7 @@ const defaultHandler = {
     const url = new URL(request.url);
     try {
       if (url.pathname === "/interactions" && request.method === "POST") return await interactions(request, env, ctx);
+      if (url.pathname === "/store-tile.png" && request.method === "GET") return await storeTileResponse(url, ctx);
       if (url.pathname === "/authorize") {
         if (request.method === "GET") return await authorizeGet(request, env);
         if (request.method === "POST") return await authorizePost(request, env);
