@@ -922,28 +922,23 @@ const EPHEMERAL = 64;
 const reply = (content) => json({ type: 4, data: { content, flags: EPHEMERAL } });
 const vpText = (n) => `${(Number(n) || 0).toLocaleString("en-US")} VP`;
 
-// Discord shows one image per embed, but embeds that share a url are merged into one gallery. So the
-// daily skins go in as extra embeds with the same url as the main one. Discord allows 10 embeds a message.
+// Discord shows one image per embed. Embeds that share a url get merged into a cropped 2x2 gallery,
+// so each daily skin gets its own embed (different url, none here) and shows uncropped at full width.
+// Discord allows 10 embeds a message.
 const MAX_EMBEDS = 10;
 
-function storeEmbeds(name, r, origin, index, gallery = true) {
-  const embed = storeEmbed(name, r, origin);
+function storeEmbeds(name, r, origin, gallery = true) {
   const snap = r.snap;
-  const icons = gallery && snap && Date.now() <= snap.daily_ends_at * 1000
-    ? (snap.daily || []).slice(0, 4).map((s) => safeIcon(s.icon))
-    : [];
-  if (!icons.some(Boolean)) return [embed];
-  const url = `${origin}/store?a=${index}`;
-  const out = [{ ...embed, url }];
-  icons.forEach((icon, i) => {
-    if (!icon) return;
-    if (!out[0].image) out[0].image = { url: icon };
-    else out.push({ url, image: { url: icon } });
-  });
-  return out;
+  const fresh = snap && Date.now() <= snap.daily_ends_at * 1000;
+  const items = gallery && fresh ? (snap.daily || []).slice(0, 4).filter((s) => safeIcon(s.icon)) : [];
+  const embed = storeEmbed(name, r, origin, items.length > 0);
+  return [
+    embed,
+    ...items.map((s) => ({ title: s.name, description: vpText(s.vp), color: embed.color, image: { url: safeIcon(s.icon) } })),
+  ];
 }
 
-function storeEmbed(name, r, origin) {
+function storeEmbed(name, r, origin, skipDaily = false) {
   const embed = { title: name, color: 0xff4655, fields: [] };
   const snap = r.snap;
   if (!snap) {
@@ -958,7 +953,7 @@ function storeEmbed(name, r, origin) {
   } else {
     embed.description = `Resets <t:${unix(snap.daily_ends_at)}:R>`;
   }
-  embed.fields.push({ name: "Daily store", value: lines(snap.daily || []).slice(0, 1024) || "Empty" });
+  if (!skipDaily) embed.fields.push({ name: "Daily store", value: lines(snap.daily || []).slice(0, 1024) || "Empty" });
   const nm = snap.night_market;
   if (nm && now < nm.ends_at * 1000 && (nm.items || []).length) {
     embed.fields.push({
@@ -982,7 +977,7 @@ async function storeCommand(env, interaction, userId, origin) {
   const loaded = await Promise.all(
     picked.map(async ({ a, name }) => ({ name, r: await loadSnapshot(env, userId, a.puuid) }))
   );
-  let embeds = loaded.flatMap(({ name, r }, i) => storeEmbeds(name, r, origin, i));
+  let embeds = loaded.flatMap(({ name, r }) => storeEmbeds(name, r, origin));
   if (embeds.length > MAX_EMBEDS) embeds = loaded.map(({ name, r }) => storeEmbed(name, r, origin));
   return { embeds };
 }
