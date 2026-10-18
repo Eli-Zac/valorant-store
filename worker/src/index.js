@@ -969,6 +969,8 @@ async function callback(request, env) {
 
 // ---------- Privacy policy and Terms ----------
 
+// PRIVACY.md and TERMS.md at the repo root carry the same text (Discord accepts GitHub links for its
+// policy URL fields). Keep them and the date below in sync when editing these pages.
 const LEGAL_UPDATED = "18 October 2026";
 const CONTACT = `<a href="https://github.com/Eli-Zac/valorant-store/issues" target="_blank" rel="noopener noreferrer">open an issue on GitHub</a>`;
 
