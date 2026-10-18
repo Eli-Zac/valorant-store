@@ -782,7 +782,7 @@ function claudeView(env, sess, origin) {
     `<div class="grid">
 <section class="card star">
 <div class="head"><h2>Use it in Discord</h2><span class="badge bad">/store</span></div>
-<p>Add the app to your Discord profile and type <em>/store</em> in any server, DM or group chat. Pick which linked Riot account to show. Only you can see the reply.</p>
+<p>Add the app to your Discord profile and type <em>/store</em> in any server, DM or group chat. Pick which linked Riot account to show. The reply is posted in the chat.</p>
 <div class="actions"><a class="btn orn" href="${esc(install)}" target="_blank" rel="noopener noreferrer">Add to Discord</a></div>
 </section>
 <section class="card">
@@ -903,7 +903,7 @@ async function accountPost(request, env, url) {
 // Discord POSTs every interaction to /interactions, signed with the app's Ed25519 key. The command is
 // installed to a user's profile (user install), so it works in servers, DMs and group chats. The
 // person who runs it is identified by their Discord id, the same id used for the web login, so the
-// "account" choices are exactly the Riot accounts they linked. Replies are only visible to them.
+// "account" choices are exactly the Riot accounts they linked. Replies are posted in the chat.
 
 const unhex = (s) => Uint8Array.from(s.match(/../g) || [], (h) => parseInt(h, 16));
 
@@ -973,7 +973,7 @@ async function followUp(interaction, data) {
     headers: { "Content-Type": "application/json", "User-Agent": DISCORD_UA },
     body: JSON.stringify({ allowed_mentions: { parse: [] }, ...data }),
   });
-  if (!r.ok) console.error("Discord follow-up failed", r.status);
+  if (!r.ok) throw new Error(`Discord follow-up failed ${r.status}: ${(await r.text()).slice(0, 500)}`);
 }
 
 async function interactions(request, env, ctx) {
@@ -1000,15 +1000,24 @@ async function interactions(request, env, ctx) {
 
   if (interaction.type === 2 && interaction.data?.name === "store") {
     if (!allowed) return reply("Your Discord account is not on this server's allow list.");
+    const work = storeCommand(env, interaction, user.id, origin).catch((e) => {
+      console.error(e);
+      return { content: "Something went wrong reading your store. Try again in a moment." };
+    });
+    // Usually the snapshot is fresh and this finishes at once, so answer directly. Only if Riot has to
+    // be called (slow) do we defer and edit the reply in afterwards.
+    const slow = Symbol();
+    const first = await Promise.race([work, new Promise((r) => setTimeout(r, 2500, slow))]);
+    if (first !== slow) return json({ type: 4, data: first });
     ctx.waitUntil(
-      storeCommand(env, interaction, user.id, origin)
-        .catch((e) => {
-          console.error(e);
-          return { content: "Something went wrong reading your store. Try again in a moment." };
+      work.then((data) =>
+        followUp(interaction, data).catch(async (e) => {
+          console.error("Discord follow-up error", e);
+          await followUp(interaction, { content: "Could not post your store. Try /store again." }).catch(() => {});
         })
-        .then((data) => followUp(interaction, data))
+      )
     );
-    return json({ type: 5, data: { flags: EPHEMERAL } });
+    return json({ type: 5 });
   }
   return reply("Unknown command.");
 }
@@ -1114,7 +1123,7 @@ const privacyPage = () =>
 <li><strong>"Stay logged in" (optional, off by default).</strong> If you turn it on, we also save your Riot login cookies, encrypted, and use them only to refresh your store when it has rotated. The encryption key is a secret held by the operator, so the operator could technically decrypt them. Only turn this on if you trust the operator. You can remove it at any time by removing the account.</li>
 <li><strong>Sign-in session.</strong> We set one strictly necessary cookie to keep you signed in and keep a matching server-side session record (your Discord ID and name, plus a token that protects forms). It expires after one hour.</li>
 <li><strong>Claude connector.</strong> If you add the connector, we keep a record of the app you approved and its access. When you ask Claude for your store, we send it your store details as text. What Claude does with that text is covered by Anthropic's own policies.</li>
-<li><strong>Discord app.</strong> If you add the Discord app to your profile and run <code>/store</code>, Discord sends us your Discord user ID and name with the command so we can find your linked accounts. We reply with your store details, visible only to you. We do not read or store messages, servers or channels.</li>
+<li><strong>Discord app.</strong> If you add the Discord app to your profile and run <code>/store</code>, Discord sends us your Discord user ID and name with the command so we can find your linked accounts. We reply with your store details, posted in the chat where you ran the command, so anyone there can see it. We do not read or store messages, servers or channels.</li>
 </ul>
 <p>We do not collect payment details, we do not sell or share your data for advertising, and we do not run analytics or advertising trackers.</p>
 

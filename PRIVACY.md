@@ -17,7 +17,7 @@ Valorant Store is a small, independent web app and Claude connector (MCP) that s
 - **"Stay logged in" (optional, off by default).** If you turn it on, we also save your Riot login cookies, encrypted, and use them only to refresh your store when it has rotated. The encryption key is a secret held by the operator, so the operator could technically decrypt them. Only turn this on if you trust the operator. You can remove it at any time by removing the account.
 - **Sign-in session.** We set one strictly necessary cookie to keep you signed in and keep a matching server-side session record (your Discord ID and name, plus a token that protects forms). It expires after one hour.
 - **Claude connector.** If you add the connector, we keep a record of the app you approved and its access. When you ask Claude for your store, we send it your store details as text. What Claude does with that text is covered by Anthropic's own policies.
-- **Discord app.** If you add the Discord app to your profile and run `/store`, Discord sends us your Discord user ID and name with the command so we can find your linked accounts. We reply with your store details, visible only to you. We do not read or store messages, servers or channels.
+- **Discord app.** If you add the Discord app to your profile and run `/store`, Discord sends us your Discord user ID and name with the command so we can find your linked accounts. We reply with your store details, posted in the chat where you ran the command, so anyone there can see it. We do not read or store messages, servers or channels.
 
 We do not collect payment details, we do not sell or share your data for advertising, and we do not run analytics or advertising trackers.
 

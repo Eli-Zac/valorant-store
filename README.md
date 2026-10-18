@@ -47,7 +47,7 @@ To add another account, sign out of Riot on that page first (or use a private wi
 
 ## Discord `/store` command (once, whoever hosts it)
 
-The deploy registers a single `/store` command with an optional `account` parameter (autocomplete lists the Riot accounts you linked). It is a user-installable app, so anyone can add it to their own profile and use it in any server, DM or group chat. Replies are only visible to the person who ran it.
+The deploy registers a single `/store` command with an optional `account` parameter (autocomplete lists the Riot accounts you linked). It is a user-installable app, so anyone can add it to their own profile and use it in any server, DM or group chat. Replies are posted in the chat, so everyone there can see them.
 
 In the Discord developer portal, for your application:
 1. **General Information** > copy the **Public Key** into the `DISCORD_PUBLIC_KEY` secret, and set **Interactions Endpoint URL** to `<your Worker URL>/interactions` (Discord checks it responds, so deploy first).
