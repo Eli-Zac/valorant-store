@@ -1004,7 +1004,9 @@ async function storeCommand(env, interaction, userId, origin) {
   );
   let embeds = loaded.flatMap(({ name, r }, i) => storeEmbeds(name, r, origin, i));
   if (embeds.length > MAX_EMBEDS) embeds = loaded.map(({ name, r }) => storeEmbed(name, r, origin));
-  return { embeds };
+  // A link button (type 2, style 5) under the embeds that opens the web app.
+  const components = [{ type: 1, components: [{ type: 2, style: 5, label: "Open store", url: `${origin}/store` }] }];
+  return { embeds, components };
 }
 
 // loadSnapshot can call Riot, which may take longer than the 3 seconds Discord allows for a first
