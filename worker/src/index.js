@@ -829,6 +829,7 @@ ${friend ? "" : '<div class="actions"><a class="btn" href="/accounts">Open Accou
 ${wal ? `<div class="stat sm"><span class="k">Wallet</span><span class="v wal"><span><img class="vpi" src="${VP_ICON}" alt="VP" width="22" height="22">${Number(wal.vp).toLocaleString("en-US")}</span><span><img class="vpi" src="${KC_ICON}" alt="KC" width="22" height="22">${Number(wal.kc).toLocaleString("en-US")}</span></span></div>` : ""}
 <div class="tools"><span class="upd">${now - snap.fetched_at * 1000 < 60000 ? "Updated just now" : "Updated " + esc(ago(snap.fetched_at * 1000))}</span>${tool}</div>
 </div>
+${!stale && snap.v !== SNAPSHOT_VERSION ? `<div class="notice warn" role="status">This snapshot was saved before accessories, bundles and the wallet were added, so they are missing. ${friend ? `${esc(cur.ownerName || "The owner")} needs to update it` : riot?.sealed ? "Hit Refresh" : "Update it from the Accounts tab"}.</div>` : ""}
 ${stale ? `<p class="sub" style="margin:0 0 1rem">This snapshot is from ${esc(ago(snap.fetched_at * 1000))}, before the store rotated. ${friend ? `${esc(cur.ownerName || "The owner")} needs to update it.` : riot?.sealed ? "Hit Refresh." : "Update it from the Accounts tab."}</p>` : ""}
 <section class="sect${stale ? " stale" : ""}">
 <div class="head"><h2>Daily store</h2><div class="tools"><span class="badge">${total.toLocaleString("en-US")} VP total</span></div></div>
@@ -843,18 +844,18 @@ ${
     : ""
 }
 ${
-  bun.length
-    ? `<section class="sect">
-<div class="head"><h2>Featured bundles</h2></div>
-<div class="bundles">${bun.map((b, i) => bundleCard(b, i)).join("")}</div>
-</section>`
-    : ""
-}
-${
   acLive
     ? `<section class="sect">
 <div class="head"><h2>Accessory store</h2><div class="tools"><span class="badge">${kcTotal.toLocaleString("en-US")} KC total</span><span class="badge" data-end="${Number(ac.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(ac.ends_at * 1000 - now)}</span></div></div>
 <div class="skins">${ac.items.map((a, i) => accessoryCard(a, i)).join("")}</div>
+</section>`
+    : ""
+}
+${
+  bun.length
+    ? `<section class="sect">
+<div class="head"><h2>Featured bundles</h2></div>
+<div class="bundles">${bun.map((b, i) => bundleCard(b, i)).join("")}</div>
 </section>`
     : ""
 }`;
