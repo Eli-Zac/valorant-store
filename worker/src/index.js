@@ -118,7 +118,7 @@ nav a.tab{color:var(--sub);position:relative;padding:.4rem 0;transition:color .2
 nav a.tab::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--red);transform:scaleX(0);transform-origin:left;transition:transform .3s var(--ease)}
 nav a.tab:hover,nav a.tab.on{color:var(--text)}nav a.tab:hover::after,nav a.tab.on::after{transform:scaleX(1)}
 .tabs{display:flex;gap:2rem;margin:0 auto 0 2.5rem}
-.who{display:flex;align-items:center;gap:.9rem;font:700 13px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--sub)}.who form{margin:0}
+.who{display:flex;align-items:center;gap:.9rem;font:700 13px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--sub)}.who form{margin:0}.pfp{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:none;margin-right:-.35rem}
 nav .btn,nav button{padding:8px 16px;font:500 13px/20px var(--font)}
 nav .btn:hover{text-decoration:none}
 .strip{--cut:20px;position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:1.5rem 3.5rem;background:var(--card);padding:1.4rem 1.75rem;margin:0 0 2.5rem;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));animation:rise .6s var(--ease) both}
@@ -271,7 +271,7 @@ function navHtml(n) {
   const tabs = TABS.map(
     ([k, label, href]) => `<a class="tab${n.tab === k ? " on" : ""}" href="${href}"${n.tab === k ? ' aria-current="page"' : ""}>${label}</a>`
   ).join("");
-  return `<nav><div>${brand}<div class="tabs">${tabs}</div><div class="who"><span>${esc(n.login)}</span><form method="post" action="/account/signout"><input type="hidden" name="csrf" value="${esc(n.csrf)}"><button class="sec sm">Sign out</button></form></div></div></nav>`;
+  return `<nav><div>${brand}<div class="tabs">${tabs}</div><div class="who">${/^[\w]{1,64}$/.test(n.avatar || "") && /^\d{1,25}$/.test(String(n.userId || "")) ? `<img class="pfp" src="https://cdn.discordapp.com/avatars/${n.userId}/${n.avatar}.png?size=64" alt="" width="28" height="28" referrerpolicy="no-referrer">` : ""}<span>${esc(n.login)}</span><form method="post" action="/account/signout"><input type="hidden" name="csrf" value="${esc(n.csrf)}"><button class="sec sm">Sign out</button></form></div></div></nav>`;
 }
 
 // opts: { lead } is the subtitle under the heading (trusted HTML), { heading } overrides the h1 text,
@@ -354,7 +354,8 @@ async function discordUser(env, origin, code) {
   });
   const user = await u.json();
   if (!user.id || !user.username) throw new Error("Could not read Discord profile");
-  return { id: String(user.id), username: String(user.username), login: String(user.global_name || user.username) };
+  const avatar = /^[\w]{1,64}$/.test(String(user.avatar || "")) ? String(user.avatar) : "";
+  return { id: String(user.id), username: String(user.username), login: String(user.global_name || user.username), avatar };
 }
 
 // ALLOWED_USERS (optional, comma-separated Discord usernames or ids). Empty means anyone can sign in.
@@ -676,7 +677,7 @@ async function finishAccount(request, env, url, state) {
   const sid = randHex(24);
   await env.STORE.put(
     "sess:" + sid,
-    JSON.stringify({ userId: user.id, login: user.login, csrf: randHex(16) }),
+    JSON.stringify({ userId: user.id, login: user.login, avatar: user.avatar, csrf: randHex(16) }),
     { expirationTtl: 3600 }
   );
   const headers = new Headers({ Location: "/store" });
@@ -747,7 +748,7 @@ function bundleCard(b, i) {
 
 // A signed-in page: same shell plus the Store / Accounts / Add-ons tabs and a sign-out button.
 const acct = (sess, tab, title, body, opts = {}) =>
-  page(title, body, 200, new Headers(), { ...opts, nav: { tab, login: sess.login, csrf: sess.csrf } });
+  page(title, body, 200, new Headers(), { ...opts, nav: { tab, login: sess.login, avatar: sess.avatar, userId: sess.userId, csrf: sess.csrf } });
 
 const flashBox = (flash) =>
   flash ? `<div class="notice${/^(Done|Disconnected)/.test(flash) ? "" : " warn"}" role="status">${esc(flash)}</div>` : "";
