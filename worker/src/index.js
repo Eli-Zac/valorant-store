@@ -211,6 +211,21 @@ dialog.vid .x:hover{color:var(--red)}dialog.vid .x:focus-visible{outline:2px sol
 .skin.accy{--tier:#4d6a8f;box-shadow:inset 0 3px 0 var(--tier)}
 .accy .art img{position:absolute;inset:1rem;width:calc(100% - 2rem);height:calc(100% - 2rem);object-fit:contain}
 .accy .art.txt span{font:700 1.3rem/1.15 var(--display);letter-spacing:.08em;text-transform:uppercase;text-align:center;color:rgba(236,232,225,.9)}
+.own{position:absolute;top:.6rem;right:.6rem;z-index:1;background:rgba(15,25,35,.85);border:1px solid rgba(236,232,225,.35);color:#ece8e1;font:700 .7rem/1 var(--display);letter-spacing:.12em;text-transform:uppercase;padding:.3rem .45rem}
+.own.sm{position:static;flex:none;font-size:.6rem;padding:.2rem .35rem}
+.accy[data-kind="spray"]{--tier:#d4a24a}.accy[data-kind="gun-buddy"]{--tier:#5fb3a1}.accy[data-kind="player-card"]{--tier:#4d6a8f}.accy[data-kind="title"]{--tier:#a77bd1}
+.accy .tags .lv{color:var(--tier)}
+.wal{display:inline-flex;gap:1rem}.wal span{display:inline-flex;align-items:center;gap:.35rem}
+.kci{vertical-align:-2px;margin-right:.3rem}
+.bundles{display:grid;gap:1rem;grid-template-columns:minmax(0,1fr)}
+.bundle{--cut:12px;position:relative;display:grid;grid-template-columns:minmax(0,1fr);background:#101820;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));animation:rise .6s var(--ease) both;animation-delay:calc(var(--i,0)*70ms)}
+.bart{position:relative;aspect-ratio:16/10;display:grid;place-items:center;padding:1rem;overflow:hidden;background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 70%),linear-gradient(180deg,#39414a 0%,#2a2f36 55%,#1b2530 100%)}
+.bart img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.binfo{padding:.2rem 0 .9rem}.bsub{margin:0;padding:0 .95rem .6rem;color:rgba(236,232,225,.7);font:600 .8rem/1.2 var(--display);letter-spacing:.08em;text-transform:uppercase}
+.bitems{list-style:none;margin:0;padding:0 .95rem}.bitems li{display:flex;align-items:center;gap:.6rem;padding:.4rem 0;border-top:1px solid rgba(236,232,225,.08);font:600 .85rem/1.2 var(--display);letter-spacing:.06em;text-transform:uppercase}
+.bitems .n{flex:1;min-width:0}.bitems .t{color:rgba(236,232,225,.55);font-size:.7rem}.bitems .p{flex:none}
+@media(min-width:46rem){.bundle{grid-template-columns:minmax(0,5fr) minmax(0,6fr)}.bart{aspect-ratio:auto;min-height:14rem}}
+@media(min-width:84rem){.bundles{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .stale .skin{opacity:.5;filter:saturate(.4)}
 @media(min-width:46rem){.skins{grid-template-columns:repeat(4,minmax(0,1fr))}.skins.nm{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(min-width:84rem){.skins.nm{grid-template-columns:repeat(6,minmax(0,1fr))}}
@@ -259,7 +274,7 @@ function navHtml(n) {
 // opts: { lead } is the subtitle under the heading (trusted HTML), { heading } overrides the h1 text,
 // { docTitle } overrides the <title>, { nav } shows the signed-in tabs. { origin, path, desc } make the page
 // public: indexable, with the link preview (Open Graph / Twitter card) that Discord and search engines read.
-const SITE_DESC = "Check today's Valorant skins, the Night Market and a live reset timer on any device, or ask Claude. Free, open source, and your Riot password never touches the site.";
+const SITE_DESC = "Check today's Valorant skins, bundles, accessories, the Night Market and a live reset timer on any device, or ask Claude. Free, open source, and your Riot password never touches the site.";
 const ICON_LINKS = `<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="apple-touch-icon" href="/apple-touch-icon.png">`;
 function headMeta(title, opts) {
   if (!opts.origin) return `<meta name="theme-color" content="#0f1923"><meta name="robots" content="noindex">${ICON_LINKS}`;
@@ -372,16 +387,23 @@ function render(snap, origin) {
   } else {
     lines.push(`Daily store, rotates in ${fmtDur(snap.daily_ends_at * 1000 - now)} (snapshot ${fmtDur(ageMs)} old):`);
   }
-  for (const s of snap.daily || []) lines.push(`- ${s.name}: ${s.vp} VP`);
+  const own = (x) => (x.owned ? " [owned]" : "");
+  if (snap.wallet) lines.push(`Wallet: ${snap.wallet.vp} VP, ${snap.wallet.rad} Radianite, ${snap.wallet.kc} Kingdom Credits.`);
+  for (const s of snap.daily || []) lines.push(`- ${s.name}: ${s.vp} VP${own(s)}`);
   const nm = snap.night_market;
   if (nm && now < nm.ends_at * 1000) {
     lines.push("", `Night Market, ends in ${fmtDur(nm.ends_at * 1000 - now)}:`);
-    for (const s of nm.items || []) lines.push(`- ${s.name}: ${s.vp} VP (${s.discount}% off)`);
+    for (const s of nm.items || []) lines.push(`- ${s.name}: ${s.vp} VP (${s.discount}% off)${own(s)}`);
+  }
+  for (const b of snap.bundles || []) {
+    if (now >= b.ends_at * 1000) continue;
+    lines.push("", `Bundle "${b.name}": ${b.vp} VP${b.discount ? ` (${b.discount}% off ${b.base_vp} VP)` : ""}, ends in ${fmtLeft(b.ends_at * 1000 - now)}:`);
+    for (const it of b.items || []) lines.push(`- ${it.name} (${it.type}): ${it.vp} VP${own(it)}`);
   }
   const ac = snap.accessories;
   if (ac && now < ac.ends_at * 1000 && (ac.items || []).length) {
     lines.push("", `Accessory store, rotates in ${fmtLeft(ac.ends_at * 1000 - now)}:`);
-    for (const a of ac.items) lines.push(`- ${a.name} (${a.type}): ${a.kc} KC`);
+    for (const a of ac.items) lines.push(`- ${a.name} (${a.type}): ${a.kc} KC${own(a)}`);
   }
   return lines.join("\n");
 }
@@ -541,7 +563,7 @@ async function getStoreText(env, userId, origin, filter = "") {
 const TOOL = {
   name: "get_valorant_store",
   description:
-    "Get the user's current Valorant daily skin store (4 skins with VP prices, time until rotation), the Night Market if active, and the accessory store (sprays, gun buddies, player cards and titles with Kingdom Credit prices) if it has items. If the user linked several Riot accounts, every account is returned unless one is named.",
+    "Get the user's current Valorant daily skin store (4 skins with VP prices, time until rotation), the Night Market if active, featured bundles, wallet balances, which items the account already owns, and the accessory store (sprays, gun buddies, player cards and titles with Kingdom Credit prices) if it has items. If the user linked several Riot accounts, every account is returned unless one is named.",
   inputSchema: {
     type: "object",
     properties: {
@@ -692,7 +714,7 @@ function skinCard(s, i) {
     : "";
   const video = safeVideo(s.video);
   return `<article class="skin" data-video="${esc(video)}" style="--i:${i}${color ? `;--tier:${color}` : ""}">
-<div class="art${icon ? "" : " none"}">${off ? `<span class="off">-${off}%</span>` : ""}${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : ""}<button type="button" class="play" aria-label="Play preview"${video ? "" : " hidden"}></button></div>
+<div class="art${icon ? "" : " none"}">${off ? `<span class="off">-${off}%</span>` : ""}${s.owned ? '<span class="own">Owned</span>' : ""}${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : ""}<button type="button" class="play" aria-label="Play preview"${video ? "" : " hidden"}></button></div>
 <div class="meta"><span class="nm">${esc(s.name)}</span><span class="vp"><img src="${VP_ICON}" alt="VP" width="16" height="16">${(Number(s.vp) || 0).toLocaleString("en-US")}</span></div>
 ${tag}${variants}
 </article>`;
@@ -700,10 +722,23 @@ ${tag}${variants}
 
 function accessoryCard(a, i) {
   const icon = safeIcon(a.icon);
-  return `<article class="skin accy" style="--i:${i}">
-<div class="art${icon ? "" : " txt"}">${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : `<span>${esc(a.name)}</span>`}</div>
+  return `<article class="skin accy" data-kind="${esc(String(a.type).toLowerCase().replace(/\s+/g, "-"))}" style="--i:${i}">
+<div class="art${icon ? "" : " txt"}">${a.owned ? '<span class="own">Owned</span>' : ""}${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : `<span>${esc(a.type)}</span>`}</div>
 <div class="meta"><span class="nm">${esc(a.name)}</span><span class="vp"><img src="${KC_ICON}" alt="KC" width="16" height="16">${(Number(a.kc) || 0).toLocaleString("en-US")}</span></div>
 <div class="tags"><span class="lv">${esc(a.type)}</span></div>
+</article>`;
+}
+
+function bundleCard(b, i) {
+  const icon = safeIcon(b.icon);
+  const items = (b.items || []).slice(0, 12);
+  return `<article class="bundle" style="--i:${i}">
+<div class="bart${icon ? "" : " none"}">${b.discount ? `<span class="off">-${Number(b.discount) || 0}%</span>` : ""}${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : ""}</div>
+<div class="binfo">
+<div class="meta"><span class="nm">${esc(b.name)}</span><span class="vp"><img src="${VP_ICON}" alt="VP" width="16" height="16">${(Number(b.vp) || 0).toLocaleString("en-US")}</span></div>
+<p class="bsub">${b.discount && b.base_vp ? `<s>${Number(b.base_vp).toLocaleString("en-US")} VP</s> · ` : ""}<span data-end="${Number(b.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(b.ends_at * 1000 - Date.now())}</span></p>
+<ul class="bitems">${items.map((it) => `<li>${it.owned ? '<span class="own sm">Owned</span>' : ""}<span class="n">${esc(it.name)}</span><span class="t">${esc(it.type)}</span><span class="p">${(Number(it.vp) || 0).toLocaleString("en-US")}</span></li>`).join("")}</ul>
+</div>
 </article>`;
 }
 
@@ -774,6 +809,9 @@ ${friend ? "" : '<div class="actions"><a class="btn" href="/accounts">Open Accou
     const nmLive = nm && now < nm.ends_at * 1000 && (nm.items || []).length;
     const ac = snap.accessories;
     const acLive = ac && now < ac.ends_at * 1000 && (ac.items || []).length;
+    const bun = (snap.bundles || []).filter((b) => now < b.ends_at * 1000);
+    const wal = snap.wallet;
+    const kcTotal = acLive ? ac.items.reduce((n, a) => n + (Number(a.kc) || 0), 0) : 0;
     const total = (snap.daily || []).reduce((n, s) => n + (Number(s.vp) || 0), 0);
     const tool = friend
       ? `<span class="badge">Shared by ${esc(cur.ownerName || "a friend")}</span>`
@@ -787,6 +825,7 @@ ${friend ? "" : '<div class="actions"><a class="btn" href="/accounts">Open Accou
         : `<span class="v clock" data-clock="${Number(snap.daily_ends_at)}">${fmtClock(snap.daily_ends_at * 1000 - now)}</span>`
     }</div>
 <div class="stat"><span class="k">Daily total</span><span class="v"><img class="vpi" src="${VP_ICON}" alt="VP" width="22" height="22">${total.toLocaleString("en-US")}</span></div>
+${wal ? `<div class="stat"><span class="k">Wallet</span><span class="v wal"><span><img class="vpi" src="${VP_ICON}" alt="VP" width="22" height="22">${Number(wal.vp).toLocaleString("en-US")}</span><span><img class="vpi" src="${KC_ICON}" alt="KC" width="22" height="22">${Number(wal.kc).toLocaleString("en-US")}</span></span></div>` : ""}
 <div class="stat"><span class="k">Updated</span><span class="v">${esc(ago(snap.fetched_at * 1000))}</span></div>
 <div class="tools">${tool}</div>
 </div>
@@ -804,9 +843,17 @@ ${
     : ""
 }
 ${
+  bun.length
+    ? `<section class="sect">
+<div class="head"><h2>Featured bundles</h2></div>
+<div class="bundles">${bun.map((b, i) => bundleCard(b, i)).join("")}</div>
+</section>`
+    : ""
+}
+${
   acLive
     ? `<section class="sect">
-<div class="head"><h2>Accessory store</h2><div class="tools"><span class="badge" data-end="${Number(ac.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(ac.ends_at * 1000 - now)}</span></div></div>
+<div class="head"><h2>Accessory store</h2><div class="tools"><span class="badge"><img class="kci" src="${KC_ICON}" alt="" width="14" height="14">${kcTotal.toLocaleString("en-US")} total</span><span class="badge" data-end="${Number(ac.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(ac.ends_at * 1000 - now)}</span></div></div>
 <div class="skins">${ac.items.map((a, i) => accessoryCard(a, i)).join("")}</div>
 </section>`
     : ""
@@ -1134,10 +1181,13 @@ function storeEmbeds(name, r, origin, puuid, gallery = true) {
   const url = `${origin}/store?acc=${encodeURIComponent(puuid)}`;
   const embed = { ...storeEmbed(name, r, origin), url };
   const snap = r.snap;
+  const accIcons = gallery && snap?.accessories && Date.now() < snap.accessories.ends_at * 1000
+    ? (snap.accessories.items || []).slice(0, 4).map((a) => safeIcon(a.icon)).filter(Boolean)
+    : [];
   const icons = gallery && snap && Date.now() <= snap.daily_ends_at * 1000
     ? (snap.daily || []).slice(0, 4).map((s) => safeIcon(s.icon))
     : [];
-  if (!icons.some(Boolean)) return [embed];
+  if (!icons.some(Boolean) && !accIcons.length) return [embed];
   const out = [embed];
   icons.forEach((icon, i) => {
     if (!icon) return;
@@ -1145,6 +1195,8 @@ function storeEmbeds(name, r, origin, puuid, gallery = true) {
     if (!out[0].image) out[0].image = image;
     else out.push({ url, image });
   });
+  // A different url makes Discord group the accessory images as their own gallery.
+  accIcons.forEach((icon) => out.push({ url: url + "&view=accessories", image: { url: tileUrl(icon, origin) } }));
   return out;
 }
 
@@ -1163,12 +1215,20 @@ function storeEmbed(name, r, origin) {
   } else {
     embed.description = `Resets <t:${unix(snap.daily_ends_at)}:R>`;
   }
-  embed.fields.push({ name: "Daily store", value: lines(snap.daily || []).slice(0, 1024) || "Empty" });
+  if (snap.wallet) embed.description += `\nWallet: ${vpText(snap.wallet.vp)} · ${Number(snap.wallet.kc).toLocaleString("en-US")} KC`;
+  embed.fields.push({ name: "Daily store", value: lines(snap.daily || [], (s) => (s.owned ? " ✓ owned" : "")).slice(0, 1024) || "Empty" });
+  for (const b of snap.bundles || []) {
+    if (now >= b.ends_at * 1000) continue;
+    embed.fields.push({
+      name: `Bundle: ${b.name} (ends <t:${unix(b.ends_at)}:R>)`,
+      value: `${vpText(b.vp)}${b.discount ? ` (${Number(b.discount)}% off)` : ""}\n${(b.items || []).map((it) => `${it.name}${it.owned ? " ✓" : ""}`).join(", ")}`.slice(0, 1024),
+    });
+  }
   const nm = snap.night_market;
   if (nm && now < nm.ends_at * 1000 && (nm.items || []).length) {
     embed.fields.push({
       name: `Night Market (ends <t:${unix(nm.ends_at)}:R>)`,
-      value: lines(nm.items, (s) => ` (${Number(s.discount) || 0}% off)`).slice(0, 1024),
+      value: lines(nm.items, (s) => ` (${Number(s.discount) || 0}% off)${s.owned ? " ✓ owned" : ""}`).slice(0, 1024),
     });
   }
   const ac = snap.accessories;

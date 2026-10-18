@@ -1,6 +1,6 @@
 # Valorant Store
 
-Check your Valorant store on the web: today’s daily skins with art and VP prices, the Night Market, and a live countdown to the next reset. It is also a Claude connector (MCP), so you can ask Claude "what’s in my Valorant store?" from any device.
+Check your Valorant store on the web: today’s daily skins with art and VP prices, the Night Market, featured bundles, the accessory store, and a live countdown to the next reset. It is also a Claude connector (MCP), so you can ask Claude "what’s in my Valorant store?" from any device.
 
 ```
 Your Riot login  -->  Cloudflare Worker + KV  <--  Web app (Discord sign-in)
@@ -59,7 +59,7 @@ Each person then opens the **Add-ons** tab on the site and clicks **Add to Disco
 
 ## 3. Check your store
 
-The **Store** tab is the main screen: daily skins, Night Market when it is live, daily VP total and a live reset timer.
+The **Store** tab is the main screen: daily skins, Night Market when it is live, featured bundles, the accessory store (sprays, gun buddies, player cards, titles), your wallet, items you already own, and a live reset timer.
 
 ## 4. Ask Claude (MCP, optional)
 
