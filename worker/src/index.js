@@ -209,8 +209,8 @@ t();setInterval(t,1e3)})();`;
 
 const TABS = [
   ["store", "Store", "/account"],
-  ["connect", "Connect", "/account/connect"],
-  ["claude", "Claude", "/account/claude"],
+  ["accounts", "Accounts", "/account/accounts"],
+  ["addons", "Add-ons", "/account/addons"],
 ];
 
 function navHtml(n) {
@@ -424,7 +424,7 @@ async function getStoreText(env, userId, origin, filter = "") {
     picked.map(async ({ a }) => {
       const r = await loadSnapshot(env, userId, a.puuid);
       let note = "";
-      if (r.expired) note = `\n\nThis account's saved Riot login has expired. Reconnect at ${origin}/account/connect.`;
+      if (r.expired) note = `\n\nThis account's saved Riot login has expired. Reconnect at ${origin}/account/accounts.`;
       else if (r.failed) note = `\n\nCould not refresh from Riot${r.error ? ": " + r.error : "."}`;
       return render(r.snap, origin) + note;
     })
@@ -580,7 +580,7 @@ function skinCard(s, i) {
 </article>`;
 }
 
-// A signed-in page: same shell plus the Store / Connect / Claude tabs and a sign-out button.
+// A signed-in page: same shell plus the Store / Accounts / Add-ons tabs and a sign-out button.
 const acct = (sess, tab, title, body, opts = {}) =>
   page(title, body, 200, new Headers(), { ...opts, nav: { tab, login: sess.login, csrf: sess.csrf } });
 
@@ -604,7 +604,7 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
       `${flashBox(flash)}<section class="card empty">
 <div class="head"><h2>No store yet</h2></div>
 <p class="sub">Link your Riot account once and your daily skins and Night Market show up here. You can link up to ${MAX_ACCOUNTS} accounts.</p>
-<div class="actions"><a class="btn orn" href="/account/connect">Connect Riot account</a></div>
+<div class="actions"><a class="btn orn" href="/account/accounts">Connect Riot account</a></div>
 </section>`,
       { lead }
     );
@@ -620,7 +620,7 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
 
   let note = "";
   if (!preloaded) {
-    if (loaded.expired) note = warn("This account's saved Riot login has expired. Reconnect on the Connect tab.");
+    if (loaded.expired) note = warn("This account's saved Riot login has expired. Reconnect on the Accounts tab.");
     else if (loaded.failed) note = warn("Could not refresh from Riot" + (loaded.error ? ": " + loaded.error : "."));
   }
 
@@ -629,14 +629,14 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
       (a, i) =>
         `<a class="chip${i === idx ? " on" : ""}" href="/account?acc=${esc(a.puuid)}"${i === idx ? ' aria-current="true"' : ""}>${esc(acctName(a, i))}</a>`
     )
-    .join("")}${accs.length < MAX_ACCOUNTS ? '<a class="chip add" href="/account/connect">+ Add account</a>' : ""}</div>`;
+    .join("")}${accs.length < MAX_ACCOUNTS ? '<a class="chip add" href="/account/accounts">+ Add account</a>' : ""}</div>`;
 
   let body;
   if (!snap) {
     body = `${note}<section class="card empty">
 <div class="head"><h2>No store yet</h2></div>
-<p class="sub">This account has no store snapshot yet. Add it again on the Connect tab.</p>
-<div class="actions"><a class="btn" href="/account/connect">Open Connect</a></div>
+<p class="sub">This account has no store snapshot yet. Add it again on the Accounts tab.</p>
+<div class="actions"><a class="btn" href="/account/accounts">Open Accounts</a></div>
 </section>`;
   } else {
     const stale = now > snap.daily_ends_at * 1000;
@@ -645,7 +645,7 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
     const total = (snap.daily || []).reduce((n, s) => n + (Number(s.vp) || 0), 0);
     const tool = riot?.sealed
       ? `<form method="post" action="/account/refresh">${csrf}<button class="sec sm">Refresh</button></form>`
-      : `<a class="btn sec sm" href="/account/connect">Update store</a>`;
+      : `<a class="btn sec sm" href="/account/accounts">Update store</a>`;
     body = `${note}<div class="strip">
 <div class="stat"><span class="k">Resets in</span>${
       stale
@@ -656,7 +656,7 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
 <div class="stat"><span class="k">Updated</span><span class="v">${esc(ago(snap.fetched_at * 1000))}</span></div>
 <div class="tools">${tool}</div>
 </div>
-${stale ? `<p class="sub" style="margin:0 0 1rem">This snapshot is from ${esc(ago(snap.fetched_at * 1000))}, before the store rotated. ${riot?.sealed ? "Hit Refresh." : "Update it from the Connect tab."}</p>` : ""}
+${stale ? `<p class="sub" style="margin:0 0 1rem">This snapshot is from ${esc(ago(snap.fetched_at * 1000))}, before the store rotated. ${riot?.sealed ? "Hit Refresh." : "Update it from the Accounts tab."}</p>` : ""}
 <section class="sect${stale ? " stale" : ""}">
 <div class="head"><h2>Daily store</h2></div>
 <div class="skins">${(snap.daily || []).map((s, i) => skinCard(s, i)).join("")}</div>
@@ -675,9 +675,9 @@ ${
   });
 }
 
-// ---------- Connect tab: linked accounts and the Riot login flow ----------
+// ---------- Accounts tab: linked accounts and the Riot login flow ----------
 
-async function connectView(env, sess, origin, flash = "") {
+async function accountsView(env, sess, origin, flash = "") {
   const uid = sess.userId;
   const accs = await getAccounts(env, uid);
   const [recs, snaps] = await Promise.all([
@@ -753,8 +753,8 @@ ${stay}
 
   return acct(
     sess,
-    "connect",
-    "Connect",
+    "accounts",
+    "Riot accounts",
     `${flashBox(flash)}<div class="grid">
 ${
   accs.length
@@ -770,23 +770,23 @@ ${add}
   );
 }
 
-// ---------- Claude tab: the MCP connector ----------
+// ---------- Add-ons tab: the Discord app and the Claude connector ----------
 
-function claudeView(env, sess, origin) {
+function addonsView(env, sess, origin) {
   const url = `${origin}/mcp`;
   const install = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(env.DISCORD_CLIENT_ID)}&integration_type=1&scope=applications.commands`;
   return acct(
     sess,
-    "claude",
-    "Ask Claude",
+    "addons",
+    "Add-ons",
     `<div class="grid">
 <section class="card star">
-<div class="head"><h2>Use it in Discord</h2><span class="badge bad">/store</span></div>
+<div class="head"><h2>Discord</h2><span class="badge bad">/store command</span></div>
 <p>Add the app to your Discord profile and type <em>/store</em> in any server, DM or group chat. Pick which linked Riot account to show. The reply is posted in the chat.</p>
 <div class="actions"><a class="btn orn" href="${esc(install)}" target="_blank" rel="noopener noreferrer">Add to Discord</a></div>
 </section>
 <section class="card">
-<div class="head"><h2>Add the connector</h2><span class="badge bad">MCP</span></div>
+<div class="head"><h2>Claude</h2><span class="badge bad">MCP connector</span></div>
 <ol class="steps">
 <li>Copy the connector URL.
 <div class="copy"><code>${esc(url)}</code><button type="button" data-copy="${esc(url)}">Copy</button></div></li>
@@ -801,10 +801,10 @@ function claudeView(env, sess, origin) {
 <li>Is the Night Market live?</li>
 <li>How long until my store resets?</li>
 </ul>
-<p class="sub">Works in Claude on web, desktop and mobile with the same account. You need to link your Riot account first, on the Connect tab.</p>
+<p class="sub">Works in Claude on web, desktop and mobile with the same account. You need to link your Riot account first, on the Accounts tab.</p>
 </section>
 </div>`,
-    { lead: "This site is also a Claude connector (MCP). Add it once and ask for your store in plain language, from any device." }
+    { lead: "Take your store with you. Use it from any Discord chat, or ask Claude in plain language, on any device." }
   );
 }
 
@@ -840,19 +840,19 @@ async function connectRiot(env, sess, form, origin) {
   }
 
   if (!tokens) {
-    return connectView(env, sess, origin, "Nothing usable was pasted. Copy the whole address after logging in, it contains access_token=." + warn);
+    return accountsView(env, sess, origin, "Nothing usable was pasted. Copy the whole address after logging in, it contains access_token=." + warn);
   }
 
   let result;
   try {
     result = await fetchSnapshot(env, tokens);
   } catch (e) {
-    return connectView(env, sess, origin, (e instanceof RiotError ? e.message : "Could not read the store.") + warn);
+    return accountsView(env, sess, origin, (e instanceof RiotError ? e.message : "Could not read the store.") + warn);
   }
-  if (!validAcct(result.puuid)) return connectView(env, sess, origin, "Riot returned an unexpected account id." + warn);
+  if (!validAcct(result.puuid)) return accountsView(env, sess, origin, "Riot returned an unexpected account id." + warn);
 
   const up = await upsertAccount(env, uid, { puuid: result.puuid, name: result.name || "" });
-  if (up.error) return connectView(env, sess, origin, up.error + warn);
+  if (up.error) return accountsView(env, sess, origin, up.error + warn);
   await env.STORE.put(`snap:${uid}:${result.puuid}`, JSON.stringify(result.snapshot));
   const rec = { puuid: result.puuid, shard: result.shard, connected: Date.now() };
   if (sealed) rec.sealed = sealed;
@@ -875,21 +875,21 @@ async function accountPost(request, env, url) {
     case "/account/riot":
       return connectRiot(env, sess, form, url.origin);
     case "/account/refresh": {
-      if (!target) return connectView(env, sess, url.origin, "That account is not linked.");
+      if (!target) return accountsView(env, sess, url.origin, "That account is not linked.");
       const r = await loadSnapshot(env, sess.userId, target.puuid, { force: true });
       const flash = r.expired
-        ? "This account's saved Riot login has expired. Reconnect on the Connect tab."
+        ? "This account's saved Riot login has expired. Reconnect on the Accounts tab."
         : r.failed
           ? "Could not refresh from Riot" + (r.error ? ": " + r.error : ".")
           : r.attempted
             ? "Done. Store refreshed."
-            : "Nothing to refresh. Add this account again on the Connect tab.";
+            : "Nothing to refresh. Add this account again on the Accounts tab.";
       return storeView(env, sess, url.origin, flash, r, target.puuid);
     }
     case "/account/remove": {
-      if (!target) return connectView(env, sess, url.origin, "That account is not linked.");
+      if (!target) return accountsView(env, sess, url.origin, "That account is not linked.");
       await removeAccount(env, sess.userId, target.puuid);
-      return connectView(env, sess, url.origin, `Disconnected ${acctName(target, accs.indexOf(target))}. Its Riot connection and saved store were deleted.`);
+      return accountsView(env, sess, url.origin, `Disconnected ${acctName(target, accs.indexOf(target))}. Its Riot connection and saved store were deleted.`);
     }
     case "/account/signout":
       await env.STORE.delete("sess:" + sess.id);
@@ -927,7 +927,7 @@ function storeEmbed(name, r, origin) {
   const embed = { title: name, color: 0xff4655, fields: [] };
   const snap = r.snap;
   if (!snap) {
-    embed.description = `No store data yet. Reconnect this account at ${origin}/account/connect.`;
+    embed.description = `No store data yet. Reconnect this account at ${origin}/account/accounts.`;
     return embed;
   }
   const now = Date.now();
@@ -954,7 +954,7 @@ function storeEmbed(name, r, origin) {
 async function storeCommand(env, interaction, userId, origin) {
   const opt = (interaction.data.options || []).find((o) => o.name === "account");
   const accs = await getAccounts(env, userId);
-  if (!accs.length) return { content: `You have not linked a Riot account yet. Do it at ${origin}/account/connect, then run /store again.` };
+  if (!accs.length) return { content: `You have not linked a Riot account yet. Do it at ${origin}/account/accounts, then run /store again.` };
   const picked = matchAccounts(accs, opt?.value);
   if (!picked.length) {
     return { content: `No linked Riot account matches "${opt.value}". Linked accounts: ${accs.map(acctName).join(", ")}.` };
@@ -1036,7 +1036,7 @@ ${d.redirectIsLoopback ? `<p class="notice" style="background:var(--amber-bg)"><
 <ul class="trust stack">
 <li><strong>Claude can only read your store</strong> (skin names and prices). It never gets your Riot password or a way to log in as you.</li>
 <li><strong>You sign in with Discord next.</strong> We only get your username and ID, not your email, servers or messages.</li>
-<li>You can delete your Riot connection and saved store at any time from the Connect tab.</li>
+<li>You can delete your Riot connection and saved store at any time from the Accounts tab.</li>
 </ul>
 <p class="sub">By continuing you agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>
 <form method="post">
@@ -1136,7 +1136,7 @@ const privacyPage = () =>
 
 <h2>How long we keep it</h2>
 <ul>
-<li>Removing a Riot account on the Connect tab deletes its saved connection and store snapshot straight away.</li>
+<li>Removing a Riot account on the Accounts tab deletes its saved connection and store snapshot straight away.</li>
 <li>Sign-in sessions expire after one hour.</li>
 <li>Your Discord ID and name, and any remaining connector records, are kept until you ask us to delete them. To have everything removed, ${CONTACT}, or revoke the connector from your Claude settings.</li>
 </ul>
@@ -1195,7 +1195,7 @@ const termsPage = () =>
 <p>To the fullest extent the law allows, the operator is not liable for any indirect or consequential loss, or for loss of accounts, items, data or profits, arising from your use of the service. Nothing in these terms limits any right you have by law that cannot be excluded.</p>
 
 <h2>Ending your use</h2>
-<p>You can stop at any time by removing your linked accounts on the Connect tab and asking us to delete your remaining records. We may suspend or remove access for anyone who breaks these terms or puts the service at risk, and we may change or end the service at any time.</p>
+<p>You can stop at any time by removing your linked accounts on the Accounts tab and asking us to delete your remaining records. We may suspend or remove access for anyone who breaks these terms or puts the service at risk, and we may change or end the service at any time.</p>
 
 <h2>Changes to these terms</h2>
 <p>We may update these terms. The date at the top will change when we do, and continuing to use the service means you accept the updated terms.</p>
@@ -1223,7 +1223,7 @@ const landing = (origin) =>
 <ul class="trust">
 <li><strong>We never see your Riot password.</strong> You log in on Riot's own page.</li>
 <li><strong>Discord shares your name and ID only.</strong> Not your email, servers or messages.</li>
-<li><strong>Delete it any time.</strong> Remove your Riot connection and saved store from the Connect tab.</li>
+<li><strong>Delete it any time.</strong> Remove your Riot connection and saved store from the Accounts tab.</li>
 </ul>
 
 <section class="sect" aria-label="Preview">
@@ -1249,7 +1249,7 @@ const landing = (origin) =>
 <div class="head"><h2>Ask Claude (MCP)</h2><span class="badge bad">Key feature</span></div>
 <p>This site is also a Claude connector, built on the Model Context Protocol (MCP). Add it once and ask Claude <em>"What's in my Valorant store?"</em> from the web, desktop or your phone.</p>
 <div class="copy"><code>${esc(origin)}/mcp</code><button type="button" data-copy="${esc(origin)}/mcp">Copy</button></div>
-<div class="actions"><a class="btn sec sm" href="/account/claude">Setup guide</a></div>
+<div class="actions"><a class="btn sec sm" href="/account/addons">Setup guide</a></div>
 </section>
 </div>
 </section>
@@ -1294,13 +1294,16 @@ const defaultHandler = {
         if (request.method === "POST") return await authorizePost(request, env);
       }
       if (url.pathname === "/callback" && request.method === "GET") return await callback(request, env);
-      if (["/account", "/account/connect", "/account/claude"].includes(url.pathname) && request.method === "GET") {
+      if (["/account", "/account/accounts", "/account/addons"].includes(url.pathname) && request.method === "GET") {
         const sess = await getSession(request, env);
         if (!sess) return await startAccount(request, env);
-        if (url.pathname === "/account/connect") return await connectView(env, sess, url.origin);
-        if (url.pathname === "/account/claude") return claudeView(env, sess, url.origin);
+        if (url.pathname === "/account/accounts") return await accountsView(env, sess, url.origin);
+        if (url.pathname === "/account/addons") return addonsView(env, sess, url.origin);
         return await storeView(env, sess, url.origin, "", null, url.searchParams.get("acc") || "");
       }
+      // Old tab addresses (still linked from earlier Discord replies).
+      if (request.method === "GET" && url.pathname === "/account/connect") return Response.redirect(url.origin + "/account/accounts", 302);
+      if (request.method === "GET" && url.pathname === "/account/claude") return Response.redirect(url.origin + "/account/addons", 302);
       if (url.pathname.startsWith("/account/") && request.method === "POST") return await accountPost(request, env, url);
       if (url.pathname === "/privacy" && request.method === "GET") return privacyPage();
       if (url.pathname === "/terms" && request.method === "GET") return termsPage();

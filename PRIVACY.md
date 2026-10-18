@@ -29,7 +29,7 @@ We do not collect payment details, we do not sell or share your data for adverti
 
 ## How long we keep it
 
-- Removing a Riot account on the Connect tab deletes its saved connection and store snapshot straight away.
+- Removing a Riot account on the Accounts tab deletes its saved connection and store snapshot straight away.
 - Sign-in sessions expire after one hour.
 - Your Discord ID and name, and any remaining connector records, are kept until you ask us to delete them. To have everything removed, [open an issue on GitHub](https://github.com/Eli-Zac/valorant-store/issues), or revoke the connector from your Claude settings.
 
