@@ -3,18 +3,17 @@
 Check your Valorant store on the web: today’s daily skins with art and VP prices, the Night Market, and a live countdown to the next reset. It is also a Claude connector (MCP), so you can ask Claude "what’s in my Valorant store?" from any device.
 
 ```
-Your Riot login or PC  -->  Cloudflare Worker + KV  <--  Web app (GitHub sign-in)
+Your Riot login or PC  -->  Cloudflare Worker + KV  <--  Web app (Discord sign-in)
                                                     <--  Claude (MCP connector)
 ```
 
-Everyone signs in with their own GitHub account and only sees their own store. The Worker keeps only a GitHub id and username, plus skin names, icons and prices.
+Everyone signs in with their own Discord account and only sees their own store. The Worker keeps only a Discord id and username, plus skin names, icons and prices.
 
 ## 1. Deploy the Worker (once, whoever hosts it)
 
-**Create a GitHub OAuth app** (GitHub > Settings > Developer settings > OAuth Apps > New):
-- Homepage URL: your Worker URL, for example `https://valorant-store.<subdomain>.workers.dev`, or your custom domain
-- Authorization callback URL: `<your Worker URL>/callback`
-- Copy the client ID and generate a client secret.
+**Create a Discord application** (https://discord.com/developers/applications > New Application), then open OAuth2:
+- Under Redirects add `<your Worker URL>/callback`, for example `https://valorant-store.<subdomain>.workers.dev/callback` (or your custom domain).
+- Copy the client ID and reset the client secret to reveal it. No bot or extra scopes are needed.
 
 **Add repository secrets** (repo Settings > Secrets and variables > Actions):
 
@@ -22,18 +21,18 @@ Everyone signs in with their own GitHub account and only sees their own store. T
 | --- | --- |
 | `CLOUDFLARE_API_TOKEN` | Created from the "Edit Cloudflare Workers" template |
 | `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID |
-| `GH_OAUTH_CLIENT_ID` | GitHub OAuth app client ID |
-| `GH_OAUTH_CLIENT_SECRET` | GitHub OAuth app client secret |
+| `DISCORD_CLIENT_ID` | Discord application client ID |
+| `DISCORD_CLIENT_SECRET` | Discord application client secret |
 
-Optional: add a repository **variable** `ALLOWED_GITHUB_USERS` (for example `Eli-Zac,friend123`) to restrict who can sign in. Leave it unset to allow any GitHub user.
+Optional: add a repository **variable** `ALLOWED_DISCORD_USERS` (Discord usernames or ids, for example `eli_zac,123456789012345678`) to restrict who can sign in. Leave it unset to allow any Discord user.
 
 Then run Actions > Deploy Worker > Run workflow. It finds or creates the KV namespace and deploys. Pushes to `worker/` redeploy automatically.
 
-If you use a custom domain, add it to the Worker in the Cloudflare dashboard and use that URL for the GitHub OAuth app and the connector. The Worker works out its own URL, so no code change is needed.
+If you use a custom domain, add it to the Worker in the Cloudflare dashboard and use that URL for the Discord redirect and the connector. The Worker works out its own URL, so no code change is needed.
 
 ## 2. Connect your Riot account (each person)
 
-Open your Worker URL, click **Sign in with GitHub**, then go to the **Connect** tab. Pick either option.
+Open your Worker URL, click **Sign in with Discord**, then go to the **Connect** tab. Pick either option.
 
 **Option A: Riot login (no PC needed)**
 1. Click the link to log in on Riot's own page. This site never sees your password.
@@ -61,10 +60,10 @@ The **Store** tab is the main screen: daily skins, Night Market when it is live,
 
 ## 4. Ask Claude (MCP, optional)
 
-The **Claude** tab shows your connector URL. Add a custom connector in Claude with `https://<your Worker URL>/mcp`, click Connect, approve, and sign in with GitHub. It then works on every device signed in to that Claude account.
+The **Claude** tab shows your connector URL. Add a custom connector in Claude with `https://<your Worker URL>/mcp`, click Connect, approve, and sign in with Discord. It then works on every device signed in to that Claude account.
 
 ## Notes
 
 - The store rotates daily at 00:00 UTC. The site and Claude show time left from the last snapshot.
 - Uses Riot's unofficial store and login endpoints, so a Valorant or Riot change can break it. Riot login mode has not been tested against the real Riot servers.
-- Only the GitHub id and username are read. No GitHub scopes are requested and GitHub tokens are not kept.
+- Only the Discord id and username are read. Only the `identify` scope is requested and Discord tokens are not kept.
