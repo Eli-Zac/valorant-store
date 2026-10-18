@@ -138,7 +138,7 @@ function loadCatalogue() {
 
 // Name, icon, rarity and variants for a skin level, cached for 30 days.
 async function skinInfo(env, uuid) {
-  const cached = await env.STORE.get("skin3:" + uuid, "json");
+  const cached = await env.STORE.get("skin4:" + uuid, "json");
   if (cached) return cached;
   try {
     const d = (await (await fetch(`${VAPI}/v1/weapons/skinlevels/${uuid}`)).json())?.data;
@@ -157,15 +157,18 @@ async function skinInfo(env, uuid) {
             };
           }
           info.levels = (sk.levels || []).length;
+          // The base skin previews with its top level; each variant has its own clip.
+          info.video = [...(sk.levels || [])].reverse().find((l) => l.streamedVideo)?.streamedVideo || null;
           // The first chroma is the base skin; the rest are the variants shown in game.
           info.chromas = (sk.chromas || []).slice(1).map((c) => ({
             name: String(c.displayName || "").replace(/^.*\(([^)]*)\)\s*$/s, "$1").replace(/^Variant \d+\s*/, "").trim() || "Variant",
             swatch: c.swatch || null,
             icon: c.fullRender || c.displayIcon || null,
+            video: c.streamedVideo || null,
           }));
         }
       } catch {}
-      if (info.tier) await env.STORE.put("skin3:" + uuid, JSON.stringify(info), { expirationTtl: 30 * 86400 });
+      if (info.tier) await env.STORE.put("skin4:" + uuid, JSON.stringify(info), { expirationTtl: 30 * 86400 });
       return info;
     }
   } catch {}
