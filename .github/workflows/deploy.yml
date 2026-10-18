@@ -87,8 +87,9 @@ jobs:
           curl -fsS -X PUT \
             -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
             --data @worker/commands.json \
-            "https://discord.com/api/v10/applications/$DISCORD_CLIENT_ID/commands" > /dev/null
-          echo "Registered Discord commands"
+            "https://discord.com/api/v10/applications/$DISCORD_CLIENT_ID/commands" > commands-registered.json
+          echo "Registered Discord commands (use </name:id> in text to make a clickable command mention):"
+          jq -r '.[] | "  \(.name) \(.id)"' commands-registered.json
 
       # Optional: enables the "stay logged in" option for Riot login. Add a repository secret
       # RIOT_ENCRYPTION_KEY (a long random string, 32+ characters) and keep it stable.
