@@ -23,6 +23,7 @@ const VIDEO_RE = /^https:\/\/valorant\.dyn\.riotcdn\.net\/[\w\/.-]{1,200}\.mp4$/
 const safeVideo = (u) => (typeof u === "string" && VIDEO_RE.test(u) ? u : "");
 const safeIcon = (u) => (typeof u === "string" && ICON_RE.test(u) ? u : null);
 const VP_ICON = "https://media.valorant-api.com/currencies/85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741/displayicon.png";
+const KC_ICON = "https://media.valorant-api.com/currencies/85ca954a-41f2-ce94-9b45-8ca3dd39a00d/displayicon.png";
 
 const esc = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const json = (obj, status = 200) =>
@@ -374,6 +375,11 @@ function render(snap, origin) {
     lines.push("", `Night Market, ends in ${fmtDur(nm.ends_at * 1000 - now)}:`);
     for (const s of nm.items || []) lines.push(`- ${s.name}: ${s.vp} VP (${s.discount}% off)`);
   }
+  const ac = snap.accessories;
+  if (ac && now < ac.ends_at * 1000 && (ac.items || []).length) {
+    lines.push("", `Accessory store, rotates in ${fmtLeft(ac.ends_at * 1000 - now)}:`);
+    for (const a of ac.items) lines.push(`- ${a.name} (${a.type}): ${a.kc} KC`);
+  }
   return lines.join("\n");
 }
 
@@ -532,7 +538,7 @@ async function getStoreText(env, userId, origin, filter = "") {
 const TOOL = {
   name: "get_valorant_store",
   description:
-    "Get the user's current Valorant daily skin store (4 skins with VP prices, time until rotation) and the Night Market if active. If the user linked several Riot accounts, every account is returned unless one is named.",
+    "Get the user's current Valorant daily skin store (4 skins with VP prices, time until rotation), the Night Market if active, and the accessory store (sprays, gun buddies, player cards and titles with Kingdom Credit prices) if it has items. If the user linked several Riot accounts, every account is returned unless one is named.",
   inputSchema: {
     type: "object",
     properties: {
@@ -689,6 +695,15 @@ ${tag}${variants}
 </article>`;
 }
 
+function accessoryCard(a, i) {
+  const icon = safeIcon(a.icon);
+  return `<article class="skin acc" style="--i:${i}">
+<div class="art${icon ? "" : " none"}">${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : ""}</div>
+<div class="meta"><span class="nm">${esc(a.name)}</span><span class="vp"><img src="${KC_ICON}" alt="KC" width="16" height="16">${(Number(a.kc) || 0).toLocaleString("en-US")}</span></div>
+<div class="tags"><span class="lv">${esc(a.type)}</span></div>
+</article>`;
+}
+
 // A signed-in page: same shell plus the Store / Accounts / Add-ons tabs and a sign-out button.
 const acct = (sess, tab, title, body, opts = {}) =>
   page(title, body, 200, new Headers(), { ...opts, nav: { tab, login: sess.login, csrf: sess.csrf } });
@@ -754,6 +769,8 @@ ${friend ? "" : '<div class="actions"><a class="btn" href="/accounts">Open Accou
     const stale = now > snap.daily_ends_at * 1000;
     const nm = snap.night_market;
     const nmLive = nm && now < nm.ends_at * 1000 && (nm.items || []).length;
+    const ac = snap.accessories;
+    const acLive = ac && now < ac.ends_at * 1000 && (ac.items || []).length;
     const total = (snap.daily || []).reduce((n, s) => n + (Number(s.vp) || 0), 0);
     const tool = friend
       ? `<span class="badge">Shared by ${esc(cur.ownerName || "a friend")}</span>`
@@ -780,6 +797,14 @@ ${
     ? `<section class="sect">
 <div class="head"><h2>Night Market</h2><div class="tools"><span class="badge warn" data-end="${Number(nm.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(nm.ends_at * 1000 - now)}</span></div></div>
 <div class="skins nm">${nm.items.map((s, i) => skinCard(s, i)).join("")}</div>
+</section>`
+    : ""
+}
+${
+  acLive
+    ? `<section class="sect">
+<div class="head"><h2>Accessory store</h2><div class="tools"><span class="badge" data-end="${Number(ac.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(ac.ends_at * 1000 - now)}</span></div></div>
+<div class="skins nm">${ac.items.map((a, i) => accessoryCard(a, i)).join("")}</div>
 </section>`
     : ""
 }`;
@@ -1141,6 +1166,13 @@ function storeEmbed(name, r, origin) {
     embed.fields.push({
       name: `Night Market (ends <t:${unix(nm.ends_at)}:R>)`,
       value: lines(nm.items, (s) => ` (${Number(s.discount) || 0}% off)`).slice(0, 1024),
+    });
+  }
+  const ac = snap.accessories;
+  if (ac && now < ac.ends_at * 1000 && (ac.items || []).length) {
+    embed.fields.push({
+      name: `Accessory store (ends <t:${unix(ac.ends_at)}:R>)`,
+      value: ac.items.map((a) => `**${a.name}** (${a.type}): ${(Number(a.kc) || 0).toLocaleString("en-US")} KC`).join("\n").slice(0, 1024),
     });
   }
   if (r.expired) embed.footer = { text: "The saved Riot login has expired. Reconnect on the website." };

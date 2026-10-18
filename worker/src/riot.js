@@ -13,6 +13,14 @@ export const RIOT_LOGIN_URL =
   "&response_type=token%20id_token&nonce=1&scope=account%20openid";
 
 const VP = "85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741";
+const KC = "85ca954a-41f2-ce94-9b45-8ca3dd39a00d";
+// Accessory item types -> where valorant-api.com describes them.
+const ACCESSORY = {
+  "d5f120f8-ff8c-4aac-92ea-f2b5acbe9475": { type: "Spray", path: "sprays", icon: ["fullTransparentIcon", "displayIcon"] },
+  "dd3bf334-87f3-40bd-b043-682a57a8dc3a": { type: "Gun buddy", path: "buddies/levels", icon: ["displayIcon"] },
+  "3f296c07-64c3-494c-923b-fe692a4fa1bd": { type: "Player card", path: "playercards", icon: ["displayIcon", "largeArt"] },
+  "de7caa6b-adf7-4588-bbd1-143831e786c6": { type: "Title", path: "playertitles", icon: [] },
+};
 const UA = "RiotClient/87.0.0.1234.5678 rso-auth (Windows;10;;Professional, x64)";
 const SHARD = { latam: "na", br: "na", na: "na", eu: "eu", ap: "ap", kr: "kr" };
 const COOKIE_NAMES = ["ssid", "clid", "csid", "tdid", "sub"];
@@ -175,8 +183,26 @@ async function skinInfo(env, uuid) {
   return { name: uuid, icon: null };
 }
 
+// Name, icon and type of an accessory (spray, buddy, card or title), cached for 30 days.
+async function accessoryInfo(env, typeId, uuid) {
+  const kind = ACCESSORY[typeId];
+  if (!kind) return { name: uuid, type: "Item", icon: null };
+  const cached = await env.STORE.get("acc1:" + uuid, "json");
+  if (cached) return cached;
+  try {
+    const d = (await (await fetch(`${VAPI}/v1/${kind.path}/${uuid}`)).json())?.data;
+    const name = d?.displayName || d?.titleText;
+    if (name) {
+      const info = { name, type: kind.type, icon: kind.icon.map((k) => d[k]).find(Boolean) || null };
+      await env.STORE.put("acc1:" + uuid, JSON.stringify(info), { expirationTtl: 30 * 86400 });
+      return info;
+    }
+  } catch {}
+  return { name: uuid, type: kind.type, icon: null };
+}
+
 // Bump when the snapshot gains fields, so older saved snapshots get refreshed.
-export const SNAPSHOT_VERSION = 3;
+export const SNAPSHOT_VERSION = 4;
 
 // Reads the store with fresh tokens. Returns { snapshot, puuid, shard, name }. Tokens are not kept.
 export async function fetchSnapshot(env, tokens) {
@@ -246,6 +272,24 @@ export async function fetchSnapshot(env, tokens) {
     };
   }
 
+  let accessories = null;
+  const acc = store.AccessoryStore;
+  if (acc?.AccessoryStoreOffers?.length) {
+    accessories = {
+      ends_at: now + Number(acc.AccessoryStoreRemainingDurationInSeconds),
+      items: await Promise.all(
+        acc.AccessoryStoreOffers.map(async (o) => {
+          const reward = o.Offer?.Rewards?.[0] || {};
+          return {
+            ...(await accessoryInfo(env, reward.ItemTypeID, reward.ItemID)),
+            kc: o.Offer?.Cost?.[KC] ?? 0,
+            quantity: Number(reward.Quantity) || 1,
+          };
+        })
+      ),
+    };
+  }
+
   return {
     puuid,
     shard,
@@ -256,6 +300,7 @@ export async function fetchSnapshot(env, tokens) {
       daily_ends_at: now + Number(panel.SingleItemOffersRemainingDurationInSeconds),
       daily,
       night_market,
+      accessories,
     },
   };
 }
