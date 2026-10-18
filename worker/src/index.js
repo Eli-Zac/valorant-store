@@ -1086,15 +1086,15 @@ async function storeTileResponse(url, ctx) {
   return res;
 }
 
-function storeEmbeds(name, r, origin, index, gallery = true) {
-  const embed = storeEmbed(name, r, origin);
+function storeEmbeds(name, r, origin, puuid, gallery = true) {
+  const url = `${origin}/store?acc=${encodeURIComponent(puuid)}`;
+  const embed = { ...storeEmbed(name, r, origin), url };
   const snap = r.snap;
   const icons = gallery && snap && Date.now() <= snap.daily_ends_at * 1000
     ? (snap.daily || []).slice(0, 4).map((s) => safeIcon(s.icon))
     : [];
   if (!icons.some(Boolean)) return [embed];
-  const url = `${origin}/store?a=${index}`;
-  const out = [{ ...embed, url }];
+  const out = [embed];
   icons.forEach((icon, i) => {
     if (!icon) return;
     const image = { url: tileUrl(icon, origin) };
@@ -1141,9 +1141,9 @@ async function storeCommand(env, interaction, userId, origin) {
     return { content: `No linked Riot account matches "${opt.value}". Linked accounts: ${accs.map(acctName).join(", ")}.` };
   }
   const loaded = await Promise.all(
-    picked.map(async ({ a, name }) => ({ name, r: await loadSnapshot(env, a.owner || userId, a.puuid) }))
+    picked.map(async ({ a, name }) => ({ name, puuid: a.puuid, r: await loadSnapshot(env, a.owner || userId, a.puuid) }))
   );
-  let embeds = loaded.flatMap(({ name, r }, i) => storeEmbeds(name, r, origin, i));
+  let embeds = loaded.flatMap(({ name, r, puuid }) => storeEmbeds(name, r, origin, puuid));
   if (embeds.length > MAX_EMBEDS) embeds = loaded.map(({ name, r }) => storeEmbed(name, r, origin));
   // A link button (type 2, style 5) under the embeds that opens the web app.
   const components = [{ type: 1, components: [{ type: 2, style: 5, label: "Open store", url: `${origin}/store` }] }];
