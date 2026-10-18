@@ -143,6 +143,16 @@ nav .btn:hover{text-decoration:none}
 .asks{list-style:none;margin:0 0 1rem;padding:0}
 .asks li{padding:.8rem 1rem;margin:0 0 .6rem;background:rgba(0,0,0,.3);border-left:2px solid var(--red);font-weight:500}
 .stepno{display:block;font:800 3rem/1 var(--display);color:var(--red);margin-bottom:.5rem}
+footer{border-top:1px solid var(--line);margin-top:2rem}
+footer>div{max-width:120rem;margin:0 auto;padding:2rem var(--pad) 3rem;color:var(--sub);font-size:14px;display:flex;flex-wrap:wrap;gap:.8rem 2rem;align-items:center;justify-content:space-between}
+footer a{color:var(--sub)}footer a:hover{color:var(--text)}
+footer .links{display:flex;gap:1.6rem;flex-wrap:wrap}
+footer p{margin:0;max-width:34rem}
+.legal{max-width:46rem}
+.legal h2{font-size:1.5rem;margin:2.6rem 0 .8rem}
+.legal h2:first-child{margin-top:0}
+.legal p,.legal li{color:#cfcbc4}
+.legal ul{margin:0 0 1rem;padding-left:1.3rem}.legal li{margin:0 0 .55rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,26rem),1fr));gap:1.4rem;align-items:start}.grid>.card{margin:0}
 .narrow{max-width:40rem}
 .sect{margin:0 0 2.75rem}
@@ -217,6 +227,7 @@ ${navHtml(opts.nav)}
 ${opts.lead ? `<p class="lead">${opts.lead}</p>` : ""}
 ${body}
 </main>
+<footer><div><p>Valorant Store is a fan project. It is not affiliated with or endorsed by Riot Games.</p><div class="links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://github.com/Eli-Zac/valorant-store" target="_blank" rel="noopener noreferrer">GitHub</a></div></div></footer>
 <script>${COPY_JS}${TICK_JS}</script></html>`;
   return new Response(html, { status, headers });
 }
@@ -822,6 +833,7 @@ ${d.redirectIsLoopback ? `<p class="notice" style="background:var(--amber-bg)"><
 <li><strong>You sign in with Discord next.</strong> We only get your username and ID, not your email, servers or messages.</li>
 <li>You can delete your Riot connection and saved store at any time from the Connect tab.</li>
 </ul>
+<p class="sub">By continuing you agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>
 <form method="post">
 <input type="hidden" name="handle" value="${esc(handle)}">
 <div class="actions split"><button name="decision" value="approve">Allow</button><button name="decision" value="deny">Deny</button></div>
@@ -883,6 +895,111 @@ async function callback(request, env) {
   return new Response(null, { status: 302, headers });
 }
 
+// ---------- Privacy policy and Terms ----------
+
+const LEGAL_UPDATED = "18 October 2026";
+const CONTACT = `<a href="https://github.com/Eli-Zac/valorant-store/issues" target="_blank" rel="noopener noreferrer">open an issue on GitHub</a>`;
+
+const privacyPage = () =>
+  page(
+    "Privacy Policy",
+    `<article class="legal">
+<h2>Who we are</h2>
+<p>Valorant Store is a small, independent web app and Claude connector (MCP) that shows you your own Valorant item store. It is run by Eli-Zac (the operator). It is not affiliated with or endorsed by Riot Games, Discord or Anthropic. The source code is public on <a href="https://github.com/Eli-Zac/valorant-store" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>
+
+<h2>What we collect and why</h2>
+<ul>
+<li><strong>Discord sign-in.</strong> When you sign in we ask Discord for the <code>identify</code> scope only. We keep your Discord user ID, username and display name so we can tell users apart and show your name. We do not ask for your email address, servers, friends or messages, and we discard the Discord access token straight after reading your profile.</li>
+<li><strong>Riot account details.</strong> When you link a Riot account we keep its Riot account ID (PUUID), its region, its Riot ID (name and tag) if Riot provides it, and when you linked it.</li>
+<li><strong>Your store.</strong> We save the latest snapshot of your store so we can show it again: skin names, images and VP prices, the Night Market if there is one, and when they rotate. This is the whole point of the service.</li>
+<li><strong>Your Riot login.</strong> You log in on Riot's own page, so we never see your password. The address you paste back contains short-lived Riot tokens. We use them once to read your store and then discard them. They are not saved.</li>
+<li><strong>"Stay logged in" (optional, off by default).</strong> If you turn it on, we also save your Riot login cookies, encrypted, and use them only to refresh your store when it has rotated. The encryption key is a secret held by the operator, so the operator could technically decrypt them. Only turn this on if you trust the operator. You can remove it at any time by removing the account.</li>
+<li><strong>Sign-in session.</strong> We set one strictly necessary cookie to keep you signed in and keep a matching server-side session record (your Discord ID and name, plus a token that protects forms). It expires after one hour.</li>
+<li><strong>Claude connector.</strong> If you add the connector, we keep a record of the app you approved and its access. When you ask Claude for your store, we send it your store details as text. What Claude does with that text is covered by Anthropic's own policies.</li>
+</ul>
+<p>We do not collect payment details, we do not sell or share your data for advertising, and we do not run analytics or advertising trackers.</p>
+
+<h2>Where your data goes</h2>
+<ul>
+<li><strong>Cloudflare</strong> hosts the service and stores your data in its Workers KV database. Cloudflare also processes technical request data such as your IP address.</li>
+<li><strong>Discord</strong> handles sign-in. <strong>Riot Games</strong> receives the requests we make to read your store.</li>
+<li><strong>Google Fonts</strong> and <strong>valorant-api.com</strong> are loaded by your browser for fonts and skin images, so they can see your IP address and browser details when you visit.</li>
+</ul>
+
+<h2>How long we keep it</h2>
+<ul>
+<li>Removing a Riot account on the Connect tab deletes its saved connection and store snapshot straight away.</li>
+<li>Sign-in sessions expire after one hour.</li>
+<li>Your Discord ID and name, and any remaining connector records, are kept until you ask us to delete them. To have everything removed, ${CONTACT}, or revoke the connector from your Claude settings.</li>
+</ul>
+
+<h2>Security</h2>
+<p>Everything is sent over HTTPS. Saved Riot cookies, if you choose to save them, are encrypted. The operator can access the service's database, so please only use it if you are comfortable with that. No system is perfectly secure, and Riot's login and store endpoints that we rely on are unofficial.</p>
+
+<h2>Your choices</h2>
+<p>You can ask what we hold about you, ask us to correct or delete it, or stop using the service at any time. To do any of that, ${CONTACT}.</p>
+
+<h2>Children</h2>
+<p>This service is not for anyone under 13, or under the minimum age Discord allows in your country.</p>
+
+<h2>Changes</h2>
+<p>If we change this policy we will update the date at the top. Material changes will be announced on the GitHub page.</p>
+
+<h2>Contact</h2>
+<p>Questions or requests: ${CONTACT}.</p>
+</article>`,
+    200,
+    new Headers(),
+    { lead: `Last updated ${LEGAL_UPDATED}.` }
+  );
+
+const termsPage = () =>
+  page(
+    "Terms of Service",
+    `<article class="legal">
+<h2>Agreement</h2>
+<p>By signing in to or using Valorant Store (the service), you agree to these terms and to our <a href="/privacy">Privacy Policy</a>. If you do not agree, please do not use it.</p>
+
+<h2>What the service is</h2>
+<p>The service shows you the Valorant item store for Riot accounts that you link, on the web and through an optional Claude connector (MCP). It is a free, independent fan project run by Eli-Zac (the operator). It is <strong>not affiliated with or endorsed by Riot Games</strong>. VALORANT and Riot Games are trademarks of Riot Games, Inc.</p>
+
+<h2>Who can use it</h2>
+<ul>
+<li>You must be old enough to use Discord in your country, and at least 13.</li>
+<li>You may only link Riot accounts that belong to you.</li>
+<li>You are responsible for your Discord and Riot accounts and for what happens through your sign-in.</li>
+</ul>
+
+<h2>Acceptable use</h2>
+<ul>
+<li>Do not try to access anyone else's data, break or probe the service, or get around its limits.</li>
+<li>Do not overload the service, for example with automated or repeated requests.</li>
+<li>Do not use the service to break the law or the rules of Riot Games, Discord or any other service.</li>
+</ul>
+
+<h2>Riot Games and unofficial access</h2>
+<p>To read your store, the service uses Riot login and store endpoints that are not officially documented for third parties. Riot can change or block them at any time, which may stop the service working. You are responsible for making sure your use complies with Riot's terms and rules. Optional features such as "stay logged in" save your Riot login cookies on the service; you use them at your own risk.</p>
+
+<h2>No guarantees</h2>
+<p>The service is provided "as is" and "as available", without warranties of any kind. We do not promise that it will be accurate, always available, or free of errors. Prices and items shown come from Riot at the time of the last update and may be out of date.</p>
+
+<h2>Limit of liability</h2>
+<p>To the fullest extent the law allows, the operator is not liable for any indirect or consequential loss, or for loss of accounts, items, data or profits, arising from your use of the service. Nothing in these terms limits any right you have by law that cannot be excluded.</p>
+
+<h2>Ending your use</h2>
+<p>You can stop at any time by removing your linked accounts on the Connect tab and asking us to delete your remaining records. We may suspend or remove access for anyone who breaks these terms or puts the service at risk, and we may change or end the service at any time.</p>
+
+<h2>Changes to these terms</h2>
+<p>We may update these terms. The date at the top will change when we do, and continuing to use the service means you accept the updated terms.</p>
+
+<h2>Contact</h2>
+<p>Questions: ${CONTACT}.</p>
+</article>`,
+    200,
+    new Headers(),
+    { lead: `Last updated ${LEGAL_UPDATED}.` }
+  );
+
 // ---------- default (non-API) handler ----------
 
 const ghostCard = (i) => `<article class="skin ghost" style="--i:${i}">
@@ -894,6 +1011,7 @@ const landing = (origin) =>
   page(
     "Valorant Store",
     `<div class="actions cta"><a class="btn" href="/account">Sign in with Discord</a><a class="btn sec" href="#features">See what you get</a></div>
+<p class="sub" style="margin:0 0 1.4rem">By signing in you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
 <ul class="trust">
 <li><strong>We never see your Riot password.</strong> You log in on Riot's own page.</li>
 <li><strong>Discord shares your name and ID only.</strong> Not your email, servers or messages.</li>
@@ -976,6 +1094,8 @@ const defaultHandler = {
       }
       if (url.pathname.startsWith("/account/") && request.method === "POST") return await accountPost(request, env, url);
       if (url.pathname === "/push" && request.method === "POST") return await handlePush(request, env);
+      if (url.pathname === "/privacy" && request.method === "GET") return privacyPage();
+      if (url.pathname === "/terms" && request.method === "GET") return termsPage();
       if (url.pathname === "/") {
         return (await getSession(request, env)) ? Response.redirect(url.origin + "/account", 302) : landing(url.origin);
       }
