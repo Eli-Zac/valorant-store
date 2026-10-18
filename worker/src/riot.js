@@ -253,7 +253,9 @@ export async function fetchSnapshot(env, tokens) {
   const puuid = info.sub;
   const live = geo?.affinities?.live;
   const shard = SHARD[live] || live;
-  if (!puuid || !shard) throw new RiotError("riot_http", "Riot did not return an account or region.");
+  if (!/^[0-9a-f-]{36}$/i.test(String(puuid)) || !/^(na|eu|ap|kr)$/.test(String(shard))) {
+    throw new RiotError("riot_http", "Riot did not return an account or region.");
+  }
 
   const platform = btoa(
     JSON.stringify({

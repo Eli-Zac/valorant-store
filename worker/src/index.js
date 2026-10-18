@@ -26,6 +26,9 @@ const VP_ICON = "https://media.valorant-api.com/currencies/85ad13f7-3d1b-5128-9e
 const RAD_ICON = "https://media.valorant-api.com/currencies/e59aa87c-4cbf-517a-5983-6e81511be9b7/displayicon.png";
 const KC_ICON = "https://media.valorant-api.com/currencies/85ca954a-41f2-ce94-9b45-8ca3dd39a00d/displayicon.png";
 
+// Names written by other people (Discord display names, Riot IDs) end up in text Claude reads, so keep them to one short plain line.
+const cleanName = (v) => String(v ?? "").replace(/[\p{C}\p{Z}]+/gu, " ").trim().slice(0, 32);
+
 const esc = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
@@ -296,6 +299,9 @@ function page(title, body, status = 200, headers = new Headers(), opts = {}) {
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Cache-Control", "no-store");
   headers.set("Content-Security-Policy", "frame-ancestors 'none'");
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Referrer-Policy", "same-origin");
+  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   const html = `<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 ${headMeta(opts.docTitle ?? title + " · Valorant Store", opts)}
@@ -355,13 +361,13 @@ async function discordUser(env, origin, code) {
   const user = await u.json();
   if (!user.id || !user.username) throw new Error("Could not read Discord profile");
   const avatar = /^[\w]{1,64}$/.test(String(user.avatar || "")) ? String(user.avatar) : "";
-  return { id: String(user.id), username: String(user.username), login: String(user.global_name || user.username), avatar };
+  return { id: String(user.id), username: String(user.username), login: cleanName(user.global_name || user.username), avatar };
 }
 
-// ALLOWED_USERS (optional, comma-separated Discord usernames or ids). Empty means anyone can sign in.
+// ALLOWED_USERS (optional, comma-separated Discord user ids). Usernames can be changed or reassigned, so only ids match. Empty means anyone can sign in.
 function isAllowed(env, user) {
   const list = (env.ALLOWED_USERS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return list.length === 0 || list.includes(user.username.toLowerCase()) || list.includes(user.id);
+  return list.length === 0 || list.includes(user.id);
 }
 
 const notAllowed = (login, headers) =>
@@ -421,7 +427,7 @@ const PUUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
 const validAcct = (p) => PUUID_RE.test(String(p));
 // Accounts a friend shared with you carry owner and ownerName, and are labelled with who shared them.
 const acctName = (a, i) =>
-  a.owner ? `${a.name || "Account"} (shared by ${a.ownerName || "a friend"})` : a.name || `Account ${i + 1}`;
+  a.owner ? `${cleanName(a.name) || "Account"} (shared by ${cleanName(a.ownerName) || "a friend"})` : cleanName(a.name) || `Account ${i + 1}`;
 
 async function getAccounts(env, uid) {
   const list = await env.STORE.get("accs:" + uid, "json");
@@ -1168,9 +1174,10 @@ const tileUrl = (icon, origin) => `${origin}/store-tile.png?u=${encodeURICompone
 // Public, and only draws icons from media.valorant-api.com. The result is cached for a day.
 async function storeTileResponse(url, ctx) {
   const path = url.searchParams.get("u") || "";
-  if (!/^[\w\/.-]{1,200}$/.test(path) || path.includes("..")) return new Response("not found", { status: 404 });
+  if (!/^(weapons|sprays|buddies|playercards)\/[\w\/.-]{1,160}$/.test(path) || path.includes("..")) return new Response("not found", { status: 404 });
   const cache = caches.default;
-  const key = new Request(url.origin + url.pathname + url.search);
+  // Keyed on the path alone so extra query parameters cannot force a fresh render each time.
+  const key = new Request(`${url.origin}${url.pathname}?u=${encodeURIComponent(path)}`);
   const hit = await cache.match(key);
   if (hit) return hit;
   const res = new Response(await skinTile(ICON_BASE + path), {
@@ -1433,7 +1440,7 @@ async function interactions(request, env, ctx) {
   const origin = new URL(request.url).origin;
   const du = interaction.member?.user || interaction.user;
   if (!du?.id) return reply("Could not tell who you are.");
-  const user = { id: String(du.id), username: String(du.username || ""), login: String(du.global_name || du.username || "") };
+  const user = { id: String(du.id), username: String(du.username || ""), login: cleanName(du.global_name || du.username || "") };
   const allowed = isAllowed(env, user);
 
   if (interaction.type === 4) return autocomplete(env, interaction, user, allowed);
@@ -1781,7 +1788,7 @@ const defaultHandler = {
         return page("Could not authorize", `<p>${esc(message)}</p>`, 400);
       }
       console.error(error);
-      return page("Something went wrong", `<p>${esc(error.message || "Unexpected error")}</p>`, 500);
+      return page("Something went wrong", `<p>Something went wrong. Try again in a moment.</p>`, 500);
     }
   },
 };
