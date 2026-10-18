@@ -23,6 +23,7 @@ const VIDEO_RE = /^https:\/\/valorant\.dyn\.riotcdn\.net\/[\w\/.-]{1,200}\.mp4$/
 const safeVideo = (u) => (typeof u === "string" && VIDEO_RE.test(u) ? u : "");
 const safeIcon = (u) => (typeof u === "string" && ICON_RE.test(u) ? u : null);
 const VP_ICON = "https://media.valorant-api.com/currencies/85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741/displayicon.png";
+const RAD_ICON = "https://media.valorant-api.com/currencies/e59aa87c-4cbf-517a-5983-6e81511be9b7/displayicon.png";
 const KC_ICON = "https://media.valorant-api.com/currencies/85ca954a-41f2-ce94-9b45-8ca3dd39a00d/displayicon.png";
 
 const esc = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -826,7 +827,7 @@ ${friend ? "" : '<div class="actions"><a class="btn" href="/accounts">Open Accou
         ? '<span class="v bad">Out of date</span>'
         : `<span class="v clock" data-clock="${Number(snap.daily_ends_at)}">${fmtClock(snap.daily_ends_at * 1000 - now)}</span>`
     }</div>
-${wal ? `<div class="stat sm"><span class="k">Wallet</span><span class="v wal"><span><img class="vpi" src="${VP_ICON}" alt="VP" width="22" height="22">${Number(wal.vp).toLocaleString("en-US")}</span><span><img class="vpi" src="${KC_ICON}" alt="KC" width="22" height="22">${Number(wal.kc).toLocaleString("en-US")}</span></span></div>` : ""}
+${wal ? `<div class="stat sm"><span class="k">Wallet</span><span class="v wal"><span><img class="vpi" src="${VP_ICON}" alt="VP" width="22" height="22">${Number(wal.vp).toLocaleString("en-US")}</span><span><img class="vpi" src="${KC_ICON}" alt="KC" width="22" height="22">${Number(wal.kc).toLocaleString("en-US")}</span><span><img class="vpi" src="${RAD_ICON}" alt="Radianite" width="22" height="22">${Number(wal.rad || 0).toLocaleString("en-US")}</span></span></div>` : ""}
 <div class="tools"><span class="upd">${now - snap.fetched_at * 1000 < 60000 ? "Updated just now" : "Updated " + esc(ago(snap.fetched_at * 1000))}</span>${tool}</div>
 </div>
 ${!stale && snap.v !== SNAPSHOT_VERSION ? `<div class="notice warn" role="status">This snapshot was saved before accessories, bundles and the wallet were added, so they are missing. ${friend ? `${esc(cur.ownerName || "The owner")} needs to update it` : riot?.sealed ? "Hit Refresh" : "Update it from the Accounts tab"}.</div>` : ""}
@@ -1216,7 +1217,7 @@ function storeEmbed(name, r, origin) {
   } else {
     embed.description = `Resets <t:${unix(snap.daily_ends_at)}:R>`;
   }
-  if (snap.wallet) embed.description += `\nWallet: ${vpText(snap.wallet.vp)} · ${Number(snap.wallet.kc).toLocaleString("en-US")} KC`;
+  if (snap.wallet) embed.description += `\nWallet: ${vpText(snap.wallet.vp)} · ${Number(snap.wallet.kc).toLocaleString("en-US")} KC · ${Number(snap.wallet.rad || 0).toLocaleString("en-US")} Radianite`;
   embed.fields.push({ name: "Daily store", value: lines(snap.daily || [], (s) => (s.owned ? " ✓ owned" : "")).slice(0, 1024) || "Empty" });
   for (const b of snap.bundles || []) {
     if (now >= b.ends_at * 1000) continue;
