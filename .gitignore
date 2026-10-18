@@ -1,4 +1,3 @@
-pc/config.json
 __pycache__/
 .wrangler/
 node_modules/

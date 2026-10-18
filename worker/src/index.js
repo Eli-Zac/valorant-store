@@ -1,11 +1,10 @@
 // Valorant store: a web app plus a remote MCP server, multi-user, with "Sign in with Discord".
 //
-//   Claude  --OAuth (Discord identity)-->  this Worker  <--push (personal key)--  your PC
+//   Claude  --OAuth (Discord identity)-->  this Worker  <--  you (web app, Riot login)
 //
 // - /mcp        the MCP endpoint (needs an OAuth access token, issued by this Worker)
 // - /authorize  consent page, then Discord sign-in (handled via @cloudflare/workers-oauth-provider)
-// - /account    sign in with Discord to use the web app and get the personal key the PC script pushes with
-// - /push       the PC script posts the store snapshot here (Bearer personal key)
+// - /account    the web app: sign in with Discord, link Riot accounts, see your store
 
 import OAuthProvider, {
   AuthorizationError,
@@ -15,9 +14,7 @@ import OAuthProvider, {
 
 import { RIOT_LOGIN_URL, RiotError, fetchSnapshot, parseCookies, parseTokens, reauth, seal, unseal } from "./riot.js";
 
-const enc = new TextEncoder();
 const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
-const sha256 = async (s) => hex(await crypto.subtle.digest("SHA-256", enc.encode(s)));
 const randHex = (n) => hex(crypto.getRandomValues(new Uint8Array(n)));
 
 const ICON_RE = /^https:\/\/media\.valorant-api\.com\/[\w\/.-]{1,200}$/;
@@ -76,17 +73,17 @@ animation:rise .6s var(--ease) both}
 .steps li{counter-increment:s;position:relative;padding:0 0 1rem 3rem}.steps li:last-child{padding-bottom:0}
 .steps li::before{content:counter(s);position:absolute;left:0;top:-.1rem;width:1.9rem;height:1.9rem;background:var(--red);color:var(--bg);font:800 1.1rem/1 var(--display);display:grid;place-items:center;clip-path:polygon(0 0,calc(100% - 7px) 0,100% 7px,100% 100%,7px 100%,0 calc(100% - 7px))}
 .notice{background:var(--green-bg);color:var(--text);border-left:3px solid var(--green);padding:.95rem 1.2rem;margin:0 0 1.4rem;font-size:15px;animation:rise .45s var(--ease) both}
-.btn,button{--c:12px;position:relative;overflow:hidden;isolation:isolate;font:700 16px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;display:inline-flex;align-items:center;justify-content:center;min-height:3.1rem;padding:0 2rem;border:0;background:var(--red);color:#fff;cursor:pointer;text-decoration:none;
-clip-path:polygon(0 0,calc(100% - var(--c)) 0,100% var(--c),100% 100%,var(--c) 100%,0 calc(100% - var(--c)));
-transition:color .3s,transform .15s var(--ease);touch-action:manipulation;-webkit-user-select:none;user-select:none}
-.btn::before,button::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--text);transform:translateX(-101%);transition:transform .4s var(--ease)}
-.btn:hover,button:hover{color:var(--bg);text-decoration:none}
-.btn:hover::before,button:hover::before{transform:translateX(0)}
-.btn:active,button:active{transform:translateY(1px) scale(.985);transition-duration:.05s}
-.sec,button[value=deny]{background:var(--card2);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
-.sec::before,button[value=deny]::before{background:var(--red)}
-.sec:hover,button[value=deny]:hover{color:#fff}
-button.danger{background:var(--red-bg);color:var(--red)}button.danger::before{background:var(--red)}button.danger:hover{color:#fff}
+.btn,button{--cta-bg:#ff4655;--cta-text:#ece8e1;--cta-hover-bg:#ece8e1;--cta-hover-text:#0f1923;
+position:relative;display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:18px 32px;border:0;border-radius:0;
+background-color:var(--cta-bg);color:var(--cta-text);font:500 18px/28px var(--font);letter-spacing:.02em;text-transform:uppercase;text-align:center;text-decoration:none;cursor:pointer;
+transition:color .25s ease-in-out,background-color .3s ease-in-out;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.btn:hover,button:hover{color:var(--cta-hover-text);background-color:var(--cta-hover-bg);text-decoration:none}
+.btn:active,button:active{transform:translateY(1px)}
+.sec,button[value=deny]{--cta-bg:#ece8e1;--cta-text:#0f1923;--cta-hover-bg:#ff4655;--cta-hover-text:#ece8e1}
+button.danger{--cta-bg:rgba(255,70,85,.14);--cta-text:#ff4655;--cta-hover-bg:#ff4655;--cta-hover-text:#ece8e1}
+button:disabled{--cta-bg:#262f38;--cta-text:#3f474f;--cta-hover-bg:#262f38;--cta-hover-text:#3f474f;cursor:not-allowed}
+.orn{outline:1px solid #ece8e1;outline-offset:3px}
+.orn:focus-visible{outline:2px solid #ff4655;outline-offset:5px}
 .actions{display:flex;gap:.9rem;flex-wrap:wrap;margin-top:1.5rem}
 .actions.split{flex-direction:row-reverse;justify-content:flex-end}.actions.split button{flex:1 1 9rem}
 :focus-visible{outline:2px solid var(--text);outline-offset:3px}
@@ -110,14 +107,14 @@ pre{font:500 14px/1.6 ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monos
 pre code{background:none;padding:0}
 .copy{display:flex;align-items:center;gap:.6rem;background:rgba(0,0,0,.35);border-left:2px solid var(--red);padding:.4rem .4rem .4rem 1rem;margin-top:.7rem}
 .copy code{background:none;padding:0;flex:1;min-width:0;font-size:14px}
-.copy button{min-height:2.2rem;padding:0 1rem;font-size:13px;--c:7px}
+.copy button{padding:6px 14px;font:500 13px/20px var(--font)}
 em{font-style:normal;font-weight:600}
 nav a.tab{color:var(--sub);position:relative;padding:.4rem 0;transition:color .2s}
 nav a.tab::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--red);transform:scaleX(0);transform-origin:left;transition:transform .3s var(--ease)}
 nav a.tab:hover,nav a.tab.on{color:var(--text)}nav a.tab:hover::after,nav a.tab.on::after{transform:scaleX(1)}
 .tabs{display:flex;gap:2rem;margin:0 auto 0 2.5rem}
 .who{display:flex;align-items:center;gap:.9rem;font:700 13px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--sub)}.who form{margin:0}
-nav .btn,nav button{font-size:13px;min-height:2.3rem;padding:0 1.1rem;--c:8px;letter-spacing:.14em}
+nav .btn,nav button{padding:8px 16px;font:500 13px/20px var(--font)}
 nav .btn:hover{text-decoration:none}
 .strip{--cut:20px;position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:1.5rem 3.5rem;background:var(--card);padding:1.4rem 1.75rem;margin:0 0 2.5rem;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));animation:rise .6s var(--ease) both}
 .strip::before{content:"";position:absolute;left:0;top:0;bottom:var(--cut);width:3px;background:var(--red)}
@@ -143,6 +140,23 @@ nav .btn:hover{text-decoration:none}
 .asks{list-style:none;margin:0 0 1rem;padding:0}
 .asks li{padding:.8rem 1rem;margin:0 0 .6rem;background:rgba(0,0,0,.3);border-left:2px solid var(--red);font-weight:500}
 .stepno{display:block;font:800 3rem/1 var(--display);color:var(--red);margin-bottom:.5rem}
+.accts{display:flex;flex-wrap:wrap;gap:.6rem;margin:0 0 1.8rem}
+.chip{--c:9px;font:700 14px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;padding:.8rem 1.15rem;background:var(--card2);color:var(--sub);text-decoration:none;clip-path:polygon(0 0,calc(100% - var(--c)) 0,100% var(--c),100% 100%,var(--c) 100%,0 calc(100% - var(--c)));transition:color .2s,background .2s}
+.chip:hover{color:var(--text);text-decoration:none}
+.chip.on{background:var(--red);color:#fff}
+.chip.add{background:var(--fill)}
+.wide{grid-column:1/-1}
+.acc{display:flex;align-items:center;flex-wrap:wrap;gap:.8rem 1.2rem;padding:1rem 0;border-top:1px solid var(--line)}
+.head+.acc{border-top:0}
+.acc .who2{flex:1 1 16rem;min-width:0;display:flex;flex-direction:column;gap:.2rem}
+.aname{font:700 1.25rem/1.1 var(--display);letter-spacing:.06em;text-transform:uppercase}
+.acts{display:flex;gap:.6rem;flex-wrap:wrap}.acts form{margin:0}
+.connect{display:grid;gap:2.5rem;grid-template-columns:minmax(0,1fr)}
+@media(min-width:62rem){.connect{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}}
+.steps.big li{padding-bottom:1.6rem}.steps.big li:last-child{padding-bottom:0}
+.steps.big li strong{display:block;font:700 1.2rem/1.2 var(--display);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.2rem}
+.steps.big li .sub{display:block;margin:0 0 .9rem}
+.paste textarea{min-height:9rem}
 footer{border-top:1px solid var(--line);margin-top:2rem}
 footer>div{max-width:120rem;margin:0 auto;padding:2rem var(--pad) 3rem;color:var(--sub);font-size:14px;display:flex;flex-wrap:wrap;gap:.8rem 2rem;align-items:center;justify-content:space-between}
 footer a{color:var(--sub)}footer a:hover{color:var(--text)}
@@ -157,7 +171,7 @@ footer p{margin:0;max-width:34rem}
 .narrow{max-width:40rem}
 .sect{margin:0 0 2.75rem}
 .tools{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}.tools form{margin:0}
-.sm{min-height:2.3rem;padding:0 1.1rem;font-size:13px;--c:8px}
+.sm{padding:9px 18px;font:500 14px/20px var(--font);letter-spacing:.02em}
 .notice.warn{background:var(--amber-bg);border-left-color:var(--amber)}
 .skins{display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr))}
 .skin{--cut:12px;position:relative;display:flex;flex-direction:column;background:#101820;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));transition:transform .35s var(--ease);animation:rise .6s var(--ease) both;animation-delay:calc(var(--i,0)*70ms)}
@@ -295,7 +309,7 @@ function render(snap, origin) {
   if (!snap) {
     return (
       "No store data yet. Connect your Riot account at " +
-      `${origin}/account (Riot login, or the PC script) and then ask again.`
+      `${origin}/account and then ask again.`
     );
   }
   const now = Date.now();
@@ -303,7 +317,7 @@ function render(snap, origin) {
   const lines = [];
   if (now > snap.daily_ends_at * 1000) {
     lines.push(
-      `Warning: this snapshot is stale (taken ${fmtDur(ageMs)} ago and the store has rotated since). Open the Riot Client on the PC so it refreshes.`
+      `Warning: this snapshot is stale (taken ${fmtDur(ageMs)} ago and the store has rotated since). Open ${origin}/account to refresh it.`
     );
   } else {
     lines.push(`Daily store, rotates in ${fmtDur(snap.daily_ends_at * 1000 - now)} (snapshot ${fmtDur(ageMs)} old):`);
@@ -317,26 +331,72 @@ function render(snap, origin) {
   return lines.join("\n");
 }
 
-// Reads the user's snapshot. If it is missing or the store has rotated (or force is set) and the user
-// chose "stay logged in", refreshes it from Riot using their saved (encrypted) cookies.
-async function loadSnapshot(env, userId, { force = false } = {}) {
-  const out = { snap: await env.STORE.get("snap:" + userId, "json"), attempted: false, expired: false, failed: false, error: "" };
+// ---------- linked Riot accounts ----------
+// Per Discord user: accs:<uid> is a light list [{ puuid, name }]. Each account has
+// riot:<uid>:<puuid> (connection details) and snap:<uid>:<puuid> (store snapshot).
+
+const MAX_ACCOUNTS = 5;
+const PUUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const validAcct = (p) => PUUID_RE.test(String(p));
+const acctName = (a, i) => a.name || `Account ${i + 1}`;
+
+async function getAccounts(env, uid) {
+  const list = await env.STORE.get("accs:" + uid, "json");
+  if (list) return list;
+  // One-time move from the old single-account layout (riot:<uid>, snap:<uid>). Data without a Riot
+  // connection (it was never linked through a Riot login) is left alone and not migrated.
+  const [rec, snap] = await Promise.all([env.STORE.get("riot:" + uid, "json"), env.STORE.get("snap:" + uid, "json")]);
+  if (!rec || !validAcct(rec.puuid)) return [];
+  const puuid = rec.puuid;
+  await env.STORE.put(`riot:${uid}:${puuid}`, JSON.stringify(rec));
+  if (snap) await env.STORE.put(`snap:${uid}:${puuid}`, JSON.stringify(snap));
+  const migrated = [{ puuid, name: "" }];
+  await env.STORE.put("accs:" + uid, JSON.stringify(migrated));
+  await env.STORE.delete("riot:" + uid);
+  await env.STORE.delete("snap:" + uid);
+  return migrated;
+}
+
+// Adds an account or updates its name. Returns { list } or { error } when the limit is reached.
+async function upsertAccount(env, uid, { puuid, name = "" }) {
+  const list = await getAccounts(env, uid);
+  const i = list.findIndex((a) => a.puuid === puuid);
+  if (i < 0 && list.length >= MAX_ACCOUNTS) return { error: `You can link up to ${MAX_ACCOUNTS} Riot accounts. Remove one first.` };
+  if (i < 0) list.push({ puuid, name });
+  else list[i] = { ...list[i], name: name || list[i].name };
+  await env.STORE.put("accs:" + uid, JSON.stringify(list));
+  return { list };
+}
+
+async function removeAccount(env, uid, puuid) {
+  const list = (await getAccounts(env, uid)).filter((a) => a.puuid !== puuid);
+  await env.STORE.put("accs:" + uid, JSON.stringify(list));
+  await env.STORE.delete(`riot:${uid}:${puuid}`);
+  await env.STORE.delete(`snap:${uid}:${puuid}`);
+}
+
+// Reads one account's snapshot. If it is missing or the store has rotated (or force is set) and the
+// user chose "stay logged in", refreshes it from Riot using their saved (encrypted) cookies.
+async function loadSnapshot(env, userId, puuid, { force = false } = {}) {
+  const snapKey = `snap:${userId}:${puuid}`;
+  const riotKey = `riot:${userId}:${puuid}`;
+  const out = { snap: await env.STORE.get(snapKey, "json"), attempted: false, expired: false, failed: false, error: "" };
   if (!force && out.snap && Date.now() <= out.snap.daily_ends_at * 1000) return out;
-  const rec = await env.STORE.get("riot:" + userId, "json");
+  const rec = await env.STORE.get(riotKey, "json");
   if (!rec?.sealed || !env.RIOT_ENCRYPTION_KEY) return out;
   out.attempted = true;
   try {
     const r = await reauth(await unseal(env.RIOT_ENCRYPTION_KEY, rec.sealed));
     out.snap = (await fetchSnapshot(env, r.tokens)).snapshot;
-    await env.STORE.put("snap:" + userId, JSON.stringify(out.snap));
+    await env.STORE.put(snapKey, JSON.stringify(out.snap));
     await env.STORE.put(
-      "riot:" + userId,
+      riotKey,
       JSON.stringify({ ...rec, sealed: await seal(env.RIOT_ENCRYPTION_KEY, r.cookies), refreshed: Date.now() })
     );
   } catch (e) {
     if (e instanceof RiotError && e.code === "session_expired") {
       out.expired = true;
-      await env.STORE.put("riot:" + userId, JSON.stringify({ ...rec, sealed: undefined, expired: Date.now() }));
+      await env.STORE.put(riotKey, JSON.stringify({ ...rec, sealed: undefined, expired: Date.now() }));
     } else {
       out.failed = true;
       out.error = e instanceof RiotError ? e.message : "";
@@ -345,13 +405,28 @@ async function loadSnapshot(env, userId, { force = false } = {}) {
   return out;
 }
 
-// Returns the store text for Claude.
-async function getStoreText(env, userId, origin) {
-  const r = await loadSnapshot(env, userId);
-  let note = "";
-  if (r.expired) note = `\n\nYour saved Riot login has expired. Reconnect at ${origin}/account.`;
-  else if (r.failed) note = `\n\nCould not refresh from Riot${r.error ? ": " + r.error : "."}`;
-  return render(r.snap, origin) + note;
+// Returns the store text for Claude: every linked account, or the one matching `filter`.
+async function getStoreText(env, userId, origin, filter = "") {
+  const accs = await getAccounts(env, userId);
+  if (!accs.length) return render(null, origin);
+  const names = accs.map(acctName);
+  let picked = accs.map((a, i) => ({ a, name: names[i] }));
+  const f = String(filter || "").trim().toLowerCase();
+  if (f) {
+    picked = picked.filter((p) => p.name.toLowerCase().includes(f));
+    if (!picked.length) return `No linked Riot account matches "${filter}". Linked accounts: ${names.join(", ")}.`;
+  }
+  const parts = await Promise.all(
+    picked.map(async ({ a }) => {
+      const r = await loadSnapshot(env, userId, a.puuid);
+      let note = "";
+      if (r.expired) note = `\n\nThis account's saved Riot login has expired. Reconnect at ${origin}/account/connect.`;
+      else if (r.failed) note = `\n\nCould not refresh from Riot${r.error ? ": " + r.error : "."}`;
+      return render(r.snap, origin) + note;
+    })
+  );
+  if (accs.length === 1) return parts[0];
+  return picked.map((p, i) => `## ${p.name}\n${parts[i]}`).join("\n\n");
 }
 
 // ---------- MCP (JSON-RPC over HTTP), behind OAuth ----------
@@ -359,8 +434,17 @@ async function getStoreText(env, userId, origin) {
 const TOOL = {
   name: "get_valorant_store",
   description:
-    "Get the user's current Valorant daily skin store (4 skins with VP prices, time until rotation) and the Night Market if active.",
-  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    "Get the user's current Valorant daily skin store (4 skins with VP prices, time until rotation) and the Night Market if active. If the user linked several Riot accounts, every account is returned unless one is named.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      account: {
+        type: "string",
+        description: "Optional. Part of a linked Riot account's name, to get just that account. Leave empty for all accounts.",
+      },
+    },
+    additionalProperties: false,
+  },
   annotations: { readOnlyHint: true },
 };
 
@@ -383,7 +467,7 @@ async function rpc(msg, userId, env, origin) {
       return ok({ tools: [TOOL] });
     case "tools/call": {
       if (params?.name !== TOOL.name) return err(-32602, "Unknown tool");
-      return ok({ content: [{ type: "text", text: await getStoreText(env, userId, origin) }] });
+      return ok({ content: [{ type: "text", text: await getStoreText(env, userId, origin, params?.arguments?.account) }] });
     }
     default:
       return err(-32601, "Method not found");
@@ -412,51 +496,6 @@ const mcpHandler = {
     return res ? json(res) : new Response(null, { status: 202 });
   },
 };
-
-// ---------- push (from the PC) ----------
-
-function validSnapshot(s) {
-  return (
-    s &&
-    Number.isFinite(s.fetched_at) &&
-    Number.isFinite(s.daily_ends_at) &&
-    Array.isArray(s.daily) &&
-    s.daily.length <= 8 &&
-    s.daily.every((d) => typeof d.name === "string" && Number.isFinite(d.vp))
-  );
-}
-
-async function handlePush(request, env) {
-  const key = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-  const userId = key ? await env.STORE.get("pk:" + (await sha256(key))) : null;
-  if (!userId) return new Response("unauthorized", { status: 401 });
-  let snap;
-  try {
-    snap = await request.json();
-  } catch {
-    return new Response("bad json", { status: 400 });
-  }
-  if (!validSnapshot(snap)) return new Response("bad snapshot", { status: 400 });
-  // Keep only the fields we use.
-  const clean = {
-    fetched_at: snap.fetched_at,
-    daily_ends_at: snap.daily_ends_at,
-    daily: snap.daily.map((d) => ({ name: d.name.slice(0, 80), vp: d.vp, icon: safeIcon(d.icon) })),
-    night_market: snap.night_market
-      ? {
-          ends_at: snap.night_market.ends_at,
-          items: (snap.night_market.items || []).slice(0, 8).map((d) => ({
-            name: String(d.name).slice(0, 80),
-            vp: d.vp,
-            discount: d.discount,
-            icon: safeIcon(d.icon),
-          })),
-        }
-      : null,
-  };
-  await env.STORE.put("snap:" + userId, JSON.stringify(clean));
-  return new Response("ok");
-}
 
 // ---------- /account: Discord sign-in, then the web app ----------
 
@@ -546,27 +585,54 @@ const flashBox = (flash) =>
 
 // ---------- Store tab: the main screen ----------
 
-async function storeView(env, sess, origin, flash = "", preloaded = null) {
-  const loaded = preloaded ?? (await loadSnapshot(env, sess.userId));
+async function storeView(env, sess, origin, flash = "", preloaded = null, sel = "") {
+  const uid = sess.userId;
+  const accs = await getAccounts(env, uid);
+  const idx = Math.max(0, accs.findIndex((a) => a.puuid === sel));
+  const cur = accs[idx];
+  const lead = `Signed in as <strong>${esc(sess.login)}</strong>.`;
+
+  if (!cur) {
+    return acct(
+      sess,
+      "store",
+      "Today's store",
+      `${flashBox(flash)}<section class="card empty">
+<div class="head"><h2>No store yet</h2></div>
+<p class="sub">Link your Riot account once and your daily skins and Night Market show up here. You can link up to ${MAX_ACCOUNTS} accounts.</p>
+<div class="actions"><a class="btn orn" href="/account/connect">Connect Riot account</a></div>
+</section>`,
+      { lead }
+    );
+  }
+
+  const loaded = preloaded ?? (await loadSnapshot(env, uid, cur.puuid));
   const snap = loaded.snap;
-  const riot = await env.STORE.get("riot:" + sess.userId, "json");
+  const riot = await env.STORE.get(`riot:${uid}:${cur.puuid}`, "json");
   const now = Date.now();
   const ago = (ms) => `${fmtDur(now - ms)} ago`;
-  const csrf = `<input type="hidden" name="csrf" value="${esc(sess.csrf)}">`;
+  const csrf = `<input type="hidden" name="csrf" value="${esc(sess.csrf)}"><input type="hidden" name="puuid" value="${esc(cur.puuid)}">`;
   const warn = (t) => `<div class="notice warn" role="status">${esc(t)}</div>`;
 
   let note = "";
   if (!preloaded) {
-    if (loaded.expired) note = warn("Your saved Riot login has expired. Reconnect on the Connect tab.");
+    if (loaded.expired) note = warn("This account's saved Riot login has expired. Reconnect on the Connect tab.");
     else if (loaded.failed) note = warn("Could not refresh from Riot" + (loaded.error ? ": " + loaded.error : "."));
   }
+
+  const chips = `<div class="accts">${accs
+    .map(
+      (a, i) =>
+        `<a class="chip${i === idx ? " on" : ""}" href="/account?acc=${esc(a.puuid)}"${i === idx ? ' aria-current="true"' : ""}>${esc(acctName(a, i))}</a>`
+    )
+    .join("")}${accs.length < MAX_ACCOUNTS ? '<a class="chip add" href="/account/connect">+ Add account</a>' : ""}</div>`;
 
   let body;
   if (!snap) {
     body = `${note}<section class="card empty">
 <div class="head"><h2>No store yet</h2></div>
-<p class="sub">Link your Riot account once and your daily skins and Night Market show up here.</p>
-<div class="actions"><a class="btn" href="/account/connect">Connect Riot account</a></div>
+<p class="sub">This account has no store snapshot yet. Add it again on the Connect tab.</p>
+<div class="actions"><a class="btn" href="/account/connect">Open Connect</a></div>
 </section>`;
   } else {
     const stale = now > snap.daily_ends_at * 1000;
@@ -600,29 +666,47 @@ ${
     : ""
 }`;
   }
-  return acct(sess, "store", "Today's store", flashBox(flash) + body, { lead: `Signed in as <strong>${esc(sess.login)}</strong>.` });
+  return acct(sess, "store", "Today's store", flashBox(flash) + chips + body, {
+    lead: accs.length > 1 ? `${lead} Showing <strong>${esc(acctName(cur, idx))}</strong>.` : lead,
+  });
 }
 
-// ---------- Connect tab: link Riot, PC script, disconnect ----------
+// ---------- Connect tab: linked accounts and the Riot login flow ----------
 
 async function connectView(env, sess, origin, flash = "") {
-  const [user, riot, snap] = await Promise.all([
-    env.STORE.get("user:" + sess.userId, "json"),
-    env.STORE.get("riot:" + sess.userId, "json"),
-    env.STORE.get("snap:" + sess.userId, "json"),
+  const uid = sess.userId;
+  const accs = await getAccounts(env, uid);
+  const [recs, snaps] = await Promise.all([
+    Promise.all(accs.map((a) => env.STORE.get(`riot:${uid}:${a.puuid}`, "json"))),
+    Promise.all(accs.map((a) => env.STORE.get(`snap:${uid}:${a.puuid}`, "json"))),
   ]);
   const ago = (ms) => `${fmtDur(Date.now() - ms)} ago`;
-  const [riotLabel, riotTone, riotText] = !riot
-    ? ["Not connected", "", "Log in with Riot to load your store."]
-    : riot.sealed
-      ? ["Staying logged in", "ok", `Connected ${ago(riot.connected)}. Your store refreshes itself when it rotates.`]
-      : riot.expired
-        ? ["Expired", "bad", "The saved login expired. Reconnect below."]
-        : ["Connected", "warn", `Connected once, ${ago(riot.connected)}. It will not refresh by itself.`];
   const csrf = `<input type="hidden" name="csrf" value="${esc(sess.csrf)}">`;
+
+  const row = (a, i) => {
+    const rec = recs[i];
+    const snap = snaps[i];
+    const [label, tone, text] = rec?.sealed
+      ? ["Staying logged in", "ok", "Refreshes itself when the store rotates."]
+      : rec?.expired
+        ? ["Expired", "bad", "The saved login expired. Add this account again below."]
+        : ["Connected", "warn", "Linked once. Add it again to update."];
+    const meta = snap ? `Store updated ${ago(snap.fetched_at * 1000)}. ${text}` : `No store yet. ${text}`;
+    const hid = `${csrf}<input type="hidden" name="puuid" value="${esc(a.puuid)}">`;
+    return `<div class="acc">
+<div class="who2"><strong class="aname">${esc(acctName(a, i))}</strong><span class="sub">${esc(meta)}</span></div>
+<span class="badge ${tone}">${esc(label)}</span>
+<div class="acts">
+<a class="btn sec sm" href="/account?acc=${esc(a.puuid)}">View</a>
+${rec?.sealed ? `<form method="post" action="/account/refresh">${hid}<button class="sec sm">Refresh</button></form>` : ""}
+<form method="post" action="/account/remove" onsubmit="return confirm('Remove this account and its saved store?')">${hid}<button class="danger sm">Remove</button></form>
+</div>
+</div>`;
+  };
+
   const stay = env.RIOT_ENCRYPTION_KEY
     ? `<details>
-<summary>Stay logged in</summary>
+<summary>Stay logged in (optional)</summary>
 <div class="body">
 <p class="sub">Paste the <em>value</em> of each Riot login cookie from auth.riotgames.com. <code>ssid</code> is required, the others make it last longer.
 Find them in your browser's developer tools under Application or Storage, then Cookies.
@@ -640,42 +724,45 @@ ${["ssid", "clid", "csid", "tdid"]
 </details>`
     : "";
 
+  const full = accs.length >= MAX_ACCOUNTS;
+  const add = full
+    ? `<section class="card wide">
+<div class="head"><h2>Add a Riot account</h2><span class="badge warn">${accs.length} of ${MAX_ACCOUNTS}</span></div>
+<p class="sub">You have linked the maximum of ${MAX_ACCOUNTS} accounts. Remove one to add another.</p>
+</section>`
+    : `<section class="card wide">
+<div class="head"><h2>${accs.length ? "Add a Riot account" : "Link your Riot account"}</h2>${accs.length ? `<span class="badge">${accs.length} of ${MAX_ACCOUNTS}</span>` : ""}</div>
+<div class="connect">
+<ol class="steps big">
+<li><strong>Log in on Riot</strong><span class="sub">Opens Riot's own page in a new tab. This site never sees your password.${accs.length ? " Adding a different account? Sign out of Riot there first, or use a private window." : ""}</span><a class="btn orn" href="${esc(RIOT_LOGIN_URL)}" target="_blank" rel="noopener noreferrer">Open Riot login</a></li>
+<li><strong>Copy the address</strong><span class="sub">You land on a page that looks empty or broken. That is expected. Copy the full address from the address bar.</span></li>
+<li><strong>Paste it here</strong><span class="sub">It is used once to read your store, then discarded. Nothing from it is saved unless you turn on Stay logged in.</span></li>
+</ol>
+<form class="paste" method="post" action="/account/riot">${csrf}
+<label class="f" for="paste">Address from Riot</label>
+<textarea id="paste" name="paste" rows="5" placeholder="https://playvalorant.com/opt_in#access_token=..."></textarea>
+${stay}
+<div class="actions"><button class="orn">${accs.length ? "Add account" : "Get my store"}</button></div>
+</form>
+</div>
+</section>`;
+
   return acct(
     sess,
     "connect",
     "Connect",
     `${flashBox(flash)}<div class="grid">
-<section class="card">
-<div class="head"><h2>Riot login</h2><span class="badge ${riotTone}">${esc(riotLabel)}</span></div>
-<p class="sub">${esc(riotText)}</p>
-<ol class="steps">
-<li><a href="${esc(RIOT_LOGIN_URL)}" target="_blank" rel="noopener noreferrer">Log in on Riot's own page</a>. This site never sees your password.</li>
-<li>You land on a page that looks empty or broken. Copy the full address from the address bar.</li>
-<li>Paste it here.</li>
-</ol>
-<p class="sub" style="margin:0 0 1rem">That address is used once to read your store, then discarded. Nothing from it is saved unless you turn on Stay logged in.</p>
-<form method="post" action="/account/riot">${csrf}
-<textarea name="paste" rows="3" placeholder="https://playvalorant.com/opt_in#access_token=..." aria-label="Address after logging in"></textarea>
-${stay}
-<div class="actions"><button>Get my store</button></div>
-</form>
-</section>
-<section class="card">
-<div class="head"><h2>PC script</h2><span class="badge ${user?.pk_hash ? "ok" : ""}">${user?.pk_hash ? "Key created" : "No key"}</span></div>
-<p class="sub">Run a small script on your PC to push your store here. Creating a new key replaces the old one.</p>
-<form method="post" action="/account/pc-key">${csrf}<div class="actions"><button class="sec">Create PC key</button></div></form>
-</section>
 ${
-  riot || snap
-    ? `<section class="card">
-<div class="head"><h2>Disconnect</h2></div>
-<p class="sub">Deletes your saved Riot connection and store snapshot from this server.</p>
-<form method="post" action="/account/disconnect">${csrf}<div class="actions"><button class="danger">Delete my Riot connection and snapshot</button></div></form>
+  accs.length
+    ? `<section class="card wide">
+<div class="head"><h2>Linked accounts</h2><span class="badge">${accs.length} of ${MAX_ACCOUNTS}</span></div>
+${accs.map(row).join("\n")}
 </section>`
     : ""
 }
+${add}
 </div>`,
-    { lead: "Link your Riot account so your store can load. Use a Riot login, or the PC script." }
+    { lead: `Link up to ${MAX_ACCOUNTS} Riot accounts to your Discord login. You log in on Riot's own page.` }
   );
 }
 
@@ -708,28 +795,6 @@ function claudeView(sess, origin) {
 </section>
 </div>`,
     { lead: "This site is also a Claude connector (MCP). Add it once and ask for your store in plain language, from any device." }
-  );
-}
-
-async function mintPcKey(env, sess, origin) {
-  const key = "vs_" + randHex(24);
-  const hash = await sha256(key);
-  const prev = await env.STORE.get("user:" + sess.userId, "json");
-  if (prev?.pk_hash) await env.STORE.delete("pk:" + prev.pk_hash);
-  await env.STORE.put("pk:" + hash, sess.userId);
-  await env.STORE.put("user:" + sess.userId, JSON.stringify({ login: sess.login, pk_hash: hash, updated: Date.now() }));
-  const cfg = JSON.stringify({ worker_url: origin, key }, null, 2);
-  return acct(
-    sess,
-    "connect",
-    "PC setup key",
-    `<section class="card narrow">
-<p>Save this as <code>config.json</code> next to <code>push_store.py</code> on your PC. It is shown once.</p>
-<pre><code>${esc(cfg)}</code></pre>
-<button type="button" class="sec" data-copy="${esc(cfg)}">Copy</button>
-<p class="sub" style="margin-top:1rem">Then run <code>python push_store.py</code> with the Riot Client open, and <code>setup_task.ps1</code> to keep it updated.</p>
-<div class="actions"><a class="btn" href="/account/connect">Done</a></div>
-</section>`
   );
 }
 
@@ -774,12 +839,15 @@ async function connectRiot(env, sess, form, origin) {
   } catch (e) {
     return connectView(env, sess, origin, (e instanceof RiotError ? e.message : "Could not read the store.") + warn);
   }
+  if (!validAcct(result.puuid)) return connectView(env, sess, origin, "Riot returned an unexpected account id." + warn);
 
-  await env.STORE.put("snap:" + uid, JSON.stringify(result.snapshot));
+  const up = await upsertAccount(env, uid, { puuid: result.puuid, name: result.name || "" });
+  if (up.error) return connectView(env, sess, origin, up.error + warn);
+  await env.STORE.put(`snap:${uid}:${result.puuid}`, JSON.stringify(result.snapshot));
   const rec = { puuid: result.puuid, shard: result.shard, connected: Date.now() };
   if (sealed) rec.sealed = sealed;
-  await env.STORE.put("riot:" + uid, JSON.stringify(rec));
-  return storeView(env, sess, origin, "Done. Your store is loaded. You can also ask Claude for it." + warn);
+  await env.STORE.put(`riot:${uid}:${result.puuid}`, JSON.stringify(rec));
+  return storeView(env, sess, origin, "Done. Your store is loaded. You can also ask Claude for it." + warn, null, result.puuid);
 }
 
 async function accountPost(request, env, url) {
@@ -789,29 +857,33 @@ async function accountPost(request, env, url) {
   if (form.get("csrf") !== sess.csrf) {
     return page("Bad request", `<p>The session check failed. Reload <a href="/account">/account</a>.</p>`, 400);
   }
+  // Account-specific actions name the account in a hidden "puuid" field; it must be one of this user's.
+  const accs = await getAccounts(env, sess.userId);
+  const puuid = String(form.get("puuid") || "");
+  const target = accs.find((a) => a.puuid === puuid);
   switch (url.pathname) {
-    case "/account/pc-key":
-      return mintPcKey(env, sess, url.origin);
     case "/account/riot":
       return connectRiot(env, sess, form, url.origin);
     case "/account/refresh": {
-      const r = await loadSnapshot(env, sess.userId, { force: true });
+      if (!target) return connectView(env, sess, url.origin, "That account is not linked.");
+      const r = await loadSnapshot(env, sess.userId, target.puuid, { force: true });
       const flash = r.expired
-        ? "Your saved Riot login has expired. Reconnect on the Connect tab."
+        ? "This account's saved Riot login has expired. Reconnect on the Connect tab."
         : r.failed
           ? "Could not refresh from Riot" + (r.error ? ": " + r.error : ".")
           : r.attempted
             ? "Done. Store refreshed."
-            : "Nothing to refresh. Link your Riot account on the Connect tab first.";
-      return storeView(env, sess, url.origin, flash, r);
+            : "Nothing to refresh. Add this account again on the Connect tab.";
+      return storeView(env, sess, url.origin, flash, r, target.puuid);
+    }
+    case "/account/remove": {
+      if (!target) return connectView(env, sess, url.origin, "That account is not linked.");
+      await removeAccount(env, sess.userId, target.puuid);
+      return connectView(env, sess, url.origin, `Disconnected ${acctName(target, accs.indexOf(target))}. Its Riot connection and saved store were deleted.`);
     }
     case "/account/signout":
       await env.STORE.delete("sess:" + sess.id);
       return new Response(null, { status: 302, headers: { Location: "/", "Set-Cookie": setCookie(SESS_COOKIE, "", 0) } });
-    case "/account/disconnect":
-      await env.STORE.delete("riot:" + sess.userId);
-      await env.STORE.delete("snap:" + sess.userId);
-      return connectView(env, sess, url.origin, "Disconnected. Your Riot connection and store snapshot were deleted.");
     default:
       return new Response("not found", { status: 404 });
   }
@@ -836,7 +908,7 @@ ${d.redirectIsLoopback ? `<p class="notice" style="background:var(--amber-bg)"><
 <p class="sub">By continuing you agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a> and <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>
 <form method="post">
 <input type="hidden" name="handle" value="${esc(handle)}">
-<div class="actions split"><button name="decision" value="approve">Allow</button><button name="decision" value="deny">Deny</button></div>
+<div class="actions split"><button class="orn" name="decision" value="approve">Allow</button><button name="decision" value="deny">Deny</button></div>
 </form>
 </section>`,
     200,
@@ -1010,7 +1082,7 @@ const ghostCard = (i) => `<article class="skin ghost" style="--i:${i}">
 const landing = (origin) =>
   page(
     "Valorant Store",
-    `<div class="actions cta"><a class="btn" href="/account">Sign in with Discord</a><a class="btn sec" href="#features">See what you get</a></div>
+    `<div class="actions cta"><a class="btn orn" href="/account">Sign in with Discord</a><a class="btn sec" href="#features">See what you get</a></div>
 <p class="sub" style="margin:0 0 1.4rem">By signing in you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
 <ul class="trust">
 <li><strong>We never see your Riot password.</strong> You log in on Riot's own page.</li>
@@ -1050,7 +1122,7 @@ const landing = (origin) =>
 <div class="head"><h2>How it works</h2></div>
 <div class="grid">
 <section class="card"><span class="stepno">01</span><h2>Sign in</h2><p class="sub">Use your Discord account. Only your username and id are kept.</p></section>
-<section class="card"><span class="stepno">02</span><h2>Link Riot</h2><p class="sub">Log in on Riot's own page, or run the PC script. This site never sees your password.</p></section>
+<section class="card"><span class="stepno">02</span><h2>Link Riot</h2><p class="sub">Log in on Riot's own page and link up to five accounts. This site never sees your password.</p></section>
 <section class="card"><span class="stepno">03</span><h2>Check your store</h2><p class="sub">Open it here on the web, or ask Claude through the MCP connector.</p></section>
 </div>
 </section>
@@ -1090,10 +1162,9 @@ const defaultHandler = {
         if (!sess) return await startAccount(request, env);
         if (url.pathname === "/account/connect") return await connectView(env, sess, url.origin);
         if (url.pathname === "/account/claude") return claudeView(sess, url.origin);
-        return await storeView(env, sess, url.origin);
+        return await storeView(env, sess, url.origin, "", null, url.searchParams.get("acc") || "");
       }
       if (url.pathname.startsWith("/account/") && request.method === "POST") return await accountPost(request, env, url);
-      if (url.pathname === "/push" && request.method === "POST") return await handlePush(request, env);
       if (url.pathname === "/privacy" && request.method === "GET") return privacyPage();
       if (url.pathname === "/terms" && request.method === "GET") return termsPage();
       if (url.pathname === "/") {

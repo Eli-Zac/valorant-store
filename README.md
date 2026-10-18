@@ -3,7 +3,7 @@
 Check your Valorant store on the web: today’s daily skins with art and VP prices, the Night Market, and a live countdown to the next reset. It is also a Claude connector (MCP), so you can ask Claude "what’s in my Valorant store?" from any device.
 
 ```
-Your Riot login or PC  -->  Cloudflare Worker + KV  <--  Web app (Discord sign-in)
+Your Riot login  -->  Cloudflare Worker + KV  <--  Web app (Discord sign-in)
                                                     <--  Claude (MCP connector)
 ```
 
@@ -32,25 +32,15 @@ If you use a custom domain, add it to the Worker in the Cloudflare dashboard and
 
 ## 2. Connect your Riot account (each person)
 
-Open your Worker URL, click **Sign in with Discord**, then go to the **Connect** tab. Pick either option.
+Open your Worker URL, click **Sign in with Discord**, then go to the **Connect** tab. You can link up to five Riot accounts to one Discord login; the **Store** tab has a switcher, and Claude sees all of them (or one, if you name it).
 
-**Option A: Riot login (no PC needed)**
-1. Click the link to log in on Riot's own page. This site never sees your password.
+1. Click **Open Riot login** to log in on Riot's own page. This site never sees your password.
 2. You land on a page that looks empty or broken. Copy the full address from the address bar and paste it into the box.
 3. Your store is read once and shown on the **Store** tab (and to Claude).
 
-*Stay logged in (optional):* also paste your Riot login cookies (`ssid` is required) so the store refreshes itself when you open the page (or Claude asks) and the daily store has rotated. The Store tab also gets a Refresh button. Cookies are saved encrypted and typically last 1 to 3 weeks before you reconnect. Anyone with those cookies can act as your Riot account, so only enable it if you trust whoever runs the server. It needs the `RIOT_ENCRYPTION_KEY` secret (below). Disconnect on the same page deletes everything.
+To add another account, sign out of Riot on that page first (or use a private window) and repeat.
 
-**Option B: PC script**
-
-Needs Windows, Python 3, and the Riot Client open and logged in.
-
-1. On the Connect tab, click Create PC key. It shows a personal `config.json` once.
-2. Copy the `pc` folder to the PC and save that as `config.json` inside it.
-3. Test: `python push_store.py --print` shows the store, then `python push_store.py` pushes it.
-4. Run `.\setup_task.ps1` once. It pushes at logon and every 2 hours.
-
-If the Riot Client is closed the push fails quietly and Claude says the snapshot is stale. Use `--shard ap|na|eu|kr` if auto-detection picks the wrong region.
+*Stay logged in (optional):* also paste your Riot login cookies (`ssid` is required) so the store refreshes itself when you open the page (or Claude asks) and the daily store has rotated. The Store tab also gets a Refresh button. Cookies are saved encrypted and typically last 1 to 3 weeks before you reconnect. Anyone with those cookies can act as your Riot account, so only enable it if you trust whoever runs the server. It needs the `RIOT_ENCRYPTION_KEY` secret (below). Removing an account on the same page deletes its saved connection and store.
 
 **Optional secret for "stay logged in":** add a repository secret `RIOT_ENCRYPTION_KEY` (a long random string, 32+ characters, keep it stable) before deploying. Without it the option is hidden.
 

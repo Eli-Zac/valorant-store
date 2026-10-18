@@ -131,7 +131,7 @@ async function skinInfo(env, uuid) {
   return { name: uuid, icon: null };
 }
 
-// Reads the store with fresh tokens. Returns { snapshot, puuid, shard }. Tokens are not kept.
+// Reads the store with fresh tokens. Returns { snapshot, puuid, shard, name }. Tokens are not kept.
 export async function fetchSnapshot(env, tokens) {
   const bearer = { Authorization: `Bearer ${tokens.access_token}`, "User-Agent": UA };
   const json = { ...bearer, "Content-Type": "application/json" };
@@ -202,6 +202,7 @@ export async function fetchSnapshot(env, tokens) {
   return {
     puuid,
     shard,
+    name: info.acct?.game_name ? info.acct.game_name + (info.acct.tag_line ? "#" + info.acct.tag_line : "") : "",
     snapshot: {
       fetched_at: now,
       daily_ends_at: now + Number(panel.SingleItemOffersRemainingDurationInSeconds),
