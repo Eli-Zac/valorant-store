@@ -172,6 +172,9 @@ async function skinInfo(env, uuid) {
   return { name: uuid, icon: null };
 }
 
+// Bump when the snapshot gains fields, so older saved snapshots get refreshed.
+export const SNAPSHOT_VERSION = 2;
+
 // Reads the store with fresh tokens. Returns { snapshot, puuid, shard, name }. Tokens are not kept.
 export async function fetchSnapshot(env, tokens) {
   const bearer = { Authorization: `Bearer ${tokens.access_token}`, "User-Agent": UA };
@@ -245,6 +248,7 @@ export async function fetchSnapshot(env, tokens) {
     shard,
     name: info.acct?.game_name ? info.acct.game_name + (info.acct.tag_line ? "#" + info.acct.tag_line : "") : "",
     snapshot: {
+      v: SNAPSHOT_VERSION,
       fetched_at: now,
       daily_ends_at: now + Number(panel.SingleItemOffersRemainingDurationInSeconds),
       daily,
