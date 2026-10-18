@@ -186,6 +186,13 @@ background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 7
 .meta .nm{min-width:0;font:700 .95rem/1.15 var(--display);letter-spacing:.08em;text-transform:uppercase}
 .vp{flex:none;display:inline-flex;align-items:center;gap:.35rem;font:700 1.05rem/1 var(--display);letter-spacing:.04em}.vp img{width:1rem;height:1rem}
 .off{position:absolute;top:.6rem;left:.6rem;z-index:1;background:var(--red);color:#fff;font:800 .9rem/1 var(--display);letter-spacing:.08em;padding:.3rem .5rem}
+.skin[style*="--tier"]{box-shadow:inset 0 3px 0 var(--tier)}
+.tags{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding:0 .95rem .6rem;font:600 .75rem/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:rgba(236,232,225,.7)}
+.tier{display:inline-flex;align-items:center;gap:.35rem;color:var(--tier,#ece8e1)}
+.vars{display:flex;gap:.4rem;flex-wrap:wrap;padding:0 .95rem .85rem}
+.sw{all:unset;box-sizing:border-box;cursor:pointer;width:24px;height:24px;border:2px solid transparent;display:grid;place-items:center;transition:border-color .2s}
+.sw:hover{border-color:rgba(236,232,225,.5)}.sw.on{border-color:var(--tier,#ece8e1)}.sw:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.sw img,.sw span{width:18px;height:18px;object-fit:cover;display:block}
 .stale .skin{opacity:.5;filter:saturate(.4)}
 @media(min-width:46rem){.skins{grid-template-columns:repeat(4,minmax(0,1fr))}.skins.nm{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(min-width:84rem){.skins.nm{grid-template-columns:repeat(6,minmax(0,1fr))}}
@@ -196,6 +203,7 @@ background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 7
 @media(prefers-contrast:more){.sub,.lead{color:var(--text)}.card{box-shadow:inset 0 0 0 1px var(--text)}}
 `;
 
+const SWATCH_JS = `document.addEventListener("click",function(e){var b=e.target.closest(".sw");if(!b)return;var c=b.closest(".skin"),i=c.querySelector(".art img");if(i&&b.dataset.art)i.src=b.dataset.art;c.querySelectorAll(".sw").forEach(function(x){x.classList.toggle("on",x===b)})});`;
 const COPY_JS = `document.addEventListener("click",function(e){var b=e.target.closest("[data-copy]");if(!b)return;
 var t=b.getAttribute("data-copy"),o=b.textContent;
 (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent="Copied"},function(){b.textContent="Press Ctrl+C"});
@@ -243,7 +251,7 @@ ${opts.lead ? `<p class="lead">${opts.lead}</p>` : ""}
 ${body}
 </main>
 <footer><div><p>Valorant Store is a fan project. It is not affiliated with or endorsed by Riot Games.</p><div class="links"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://github.com/Eli-Zac/valorant-store" target="_blank" rel="noopener noreferrer">GitHub</a></div></div></footer>
-<script>${COPY_JS}${TICK_JS}</script></html>`;
+<script>${COPY_JS}${TICK_JS}${SWATCH_JS}</script></html>`;
   return new Response(html, { status, headers });
 }
 
@@ -575,9 +583,23 @@ const fmtClock = (ms) => {
 function skinCard(s, i) {
   const icon = safeIcon(s.icon);
   const off = Number(s.discount) || 0;
-  return `<article class="skin" style="--i:${i}">
+  const t = s.tier;
+  const color = t && /^[0-9a-f]{6}$/i.test(t.color || "") ? "#" + t.color : "";
+  const tIcon = t && safeIcon(t.icon);
+  const chromas = (s.chromas || []).filter((c) => safeIcon(c.swatch)).slice(0, 8);
+  const levels = Number(s.levels) || 0;
+  const variants = chromas.length
+    ? `<div class="vars" role="group" aria-label="Variants"><button type="button" class="sw on" data-art="${esc(icon || "")}" title="Base" aria-label="Base"><span style="background:#ece8e1"></span></button>${chromas
+        .map((c) => `<button type="button" class="sw" data-art="${esc(safeIcon(c.icon) || icon || "")}" title="${esc(c.name)}" aria-label="${esc(c.name)}"><img src="${esc(safeIcon(c.swatch))}" alt="" loading="lazy" width="22" height="22"></button>`)
+        .join("")}</div>`
+    : "";
+  const tag = t || levels > 1
+    ? `<div class="tags">${t ? `<span class="tier">${tIcon ? `<img src="${esc(tIcon)}" alt="" width="16" height="16">` : ""}${esc(t.name)}</span>` : ""}${levels > 1 ? `<span class="lv">${levels} levels</span>` : ""}</div>`
+    : "";
+  return `<article class="skin" style="--i:${i}${color ? `;--tier:${color}` : ""}">
 <div class="art${icon ? "" : " none"}">${off ? `<span class="off">-${off}%</span>` : ""}${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : ""}</div>
 <div class="meta"><span class="nm">${esc(s.name)}</span><span class="vp"><img src="${VP_ICON}" alt="VP" width="16" height="16">${(Number(s.vp) || 0).toLocaleString("en-US")}</span></div>
+${tag}${variants}
 </article>`;
 }
 
