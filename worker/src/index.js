@@ -253,14 +253,30 @@ function navHtml(n) {
 }
 
 // opts: { lead } is the subtitle under the heading (trusted HTML), { heading } overrides the h1 text,
-// { docTitle } overrides the <title>, { nav } shows the signed-in tabs.
+// { docTitle } overrides the <title>, { nav } shows the signed-in tabs. { origin, path, desc } make the page
+// public: indexable, with the link preview (Open Graph / Twitter card) that Discord and search engines read.
+const SITE_DESC = "Check today's Valorant skins, the Night Market and a live reset timer on any device, or ask Claude. Free, open source, and your Riot password never touches the site.";
+const ICON_LINKS = `<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="apple-touch-icon" href="/apple-touch-icon.png">`;
+function headMeta(title, opts) {
+  if (!opts.origin) return `<meta name="theme-color" content="#0f1923"><meta name="robots" content="noindex">${ICON_LINKS}`;
+  const desc = esc(opts.desc ?? SITE_DESC);
+  const t = esc(title);
+  const url = esc(opts.origin + (opts.path ?? "/"));
+  const img = esc(opts.origin + "/og.png");
+  // Discord paints its embed's side stripe from theme-color.
+  return `<meta name="theme-color" content="#ff4655"><meta name="description" content="${desc}"><link rel="canonical" href="${url}">${ICON_LINKS}
+<meta property="og:type" content="website"><meta property="og:site_name" content="Valorant Store"><meta property="og:title" content="${t}"><meta property="og:description" content="${desc}"><meta property="og:url" content="${url}">
+<meta property="og:image" content="${img}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Valorant Store: today's skins, the Night Market and a live reset timer">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${t}"><meta name="twitter:description" content="${desc}"><meta name="twitter:image" content="${img}">`;
+}
+
 function page(title, body, status = 200, headers = new Headers(), opts = {}) {
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Cache-Control", "no-store");
   headers.set("Content-Security-Policy", "frame-ancestors 'none'");
   const html = `<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0f1923">
+${headMeta(opts.docTitle ?? title + " · Valorant Store", opts)}
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
 <title>${esc(opts.docTitle ?? title + " \u00b7 Valorant Store")}</title>
@@ -1447,7 +1463,7 @@ async function callback(request, env) {
 const LEGAL_UPDATED = "18 October 2026";
 const CONTACT = `<a href="https://github.com/Eli-Zac/valorant-store/issues" target="_blank" rel="noopener noreferrer">open an issue on GitHub</a>`;
 
-const privacyPage = () =>
+const privacyPage = (origin) =>
   page(
     "Privacy Policy",
     `<article class="legal">
@@ -1499,10 +1515,10 @@ const privacyPage = () =>
 </article>`,
     200,
     new Headers(),
-    { lead: `Last updated ${LEGAL_UPDATED}.` }
+    { lead: `Last updated ${LEGAL_UPDATED}.`, origin, path: "/privacy", desc: "What Valorant Store keeps, what it never sees, and how to delete it." }
   );
 
-const termsPage = () =>
+const termsPage = (origin) =>
   page(
     "Terms of Service",
     `<article class="legal">
@@ -1546,7 +1562,7 @@ const termsPage = () =>
 </article>`,
     200,
     new Headers(),
-    { lead: `Last updated ${LEGAL_UPDATED}.` }
+    { lead: `Last updated ${LEGAL_UPDATED}.`, origin, path: "/terms", desc: "The rules for using Valorant Store, a free fan-made Valorant store viewer." }
   );
 
 // ---------- default (non-API) handler ----------
@@ -1620,6 +1636,7 @@ const landing = (origin) =>
     new Headers(),
     {
       docTitle: "Valorant Store",
+      origin,
       heading: "Check your Valorant store.",
       lead: "Today's skins, the Night Market and a live reset timer, on any device. Prefer to ask in plain language? It works as a Claude connector (MCP) too.",
     }
@@ -1641,14 +1658,18 @@ const defaultHandler = {
       if (request.method === "GET" && MOVED[url.pathname]) return Response.redirect(url.origin + MOVED[url.pathname] + url.search, 302);
       if (["/store", "/accounts", "/addons"].includes(url.pathname) && request.method === "GET") {
         const sess = await getSession(request, env);
-        if (!sess) return await startAccount(request, env);
+        if (!sess) {
+          // Link-preview crawlers can't sign in. Without this, a pasted /store link would unfurl as Discord's login page.
+          if (/bot|crawler|spider|preview|slack|facebookexternalhit|embedly/i.test(request.headers.get("user-agent") || "")) return landing(url.origin);
+          return await startAccount(request, env);
+        }
         if (url.pathname === "/accounts") return await accountsView(env, sess, url.origin);
         if (url.pathname === "/addons") return addonsView(env, sess, url.origin);
         return await storeView(env, sess, url.origin, "", null, url.searchParams.get("acc") || "");
       }
       if (url.pathname.startsWith("/account/") && request.method === "POST") return await accountPost(request, env, url);
-      if (url.pathname === "/privacy" && request.method === "GET") return privacyPage();
-      if (url.pathname === "/terms" && request.method === "GET") return termsPage();
+      if (url.pathname === "/privacy" && request.method === "GET") return privacyPage(url.origin);
+      if (url.pathname === "/terms" && request.method === "GET") return termsPage(url.origin);
       if (url.pathname === "/") {
         return (await getSession(request, env)) ? Response.redirect(url.origin + "/store", 302) : landing(url.origin);
       }
