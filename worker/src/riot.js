@@ -176,7 +176,7 @@ async function skinInfo(env, uuid) {
 }
 
 // Bump when the snapshot gains fields, so older saved snapshots get refreshed.
-export const SNAPSHOT_VERSION = 2;
+export const SNAPSHOT_VERSION = 3;
 
 // Reads the store with fresh tokens. Returns { snapshot, puuid, shard, name }. Tokens are not kept.
 export async function fetchSnapshot(env, tokens) {
