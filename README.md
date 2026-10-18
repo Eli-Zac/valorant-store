@@ -23,6 +23,7 @@ Everyone signs in with their own Discord account and only sees their own store. 
 | `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID |
 | `DISCORD_CLIENT_ID` | Discord application client ID |
 | `DISCORD_CLIENT_SECRET` | Discord application client secret |
+| `DISCORD_PUBLIC_KEY` | Discord application public key (General Information page), used to verify `/store` requests |
 
 Optional: add a repository **variable** `ALLOWED_DISCORD_USERS` (Discord usernames or ids, for example `eli_zac,123456789012345678`) to restrict who can sign in. Leave it unset to allow any Discord user.
 
@@ -43,6 +44,16 @@ To add another account, sign out of Riot on that page first (or use a private wi
 *Stay logged in (optional):* also paste your Riot login cookies (`ssid` is required) so the store refreshes itself when you open the page (or Claude asks) and the daily store has rotated. The Store tab also gets a Refresh button. Cookies are saved encrypted and typically last 1 to 3 weeks before you reconnect. Anyone with those cookies can act as your Riot account, so only enable it if you trust whoever runs the server. It needs the `RIOT_ENCRYPTION_KEY` secret (below). Removing an account on the same page deletes its saved connection and store.
 
 **Optional secret for "stay logged in":** add a repository secret `RIOT_ENCRYPTION_KEY` (a long random string, 32+ characters, keep it stable) before deploying. Without it the option is hidden.
+
+## Discord `/store` command (once, whoever hosts it)
+
+The deploy registers a single `/store` command with an optional `account` parameter (autocomplete lists the Riot accounts you linked). It is a user-installable app, so anyone can add it to their own profile and use it in any server, DM or group chat. Replies are only visible to the person who ran it.
+
+In the Discord developer portal, for your application:
+1. **General Information** > copy the **Public Key** into the `DISCORD_PUBLIC_KEY` secret, and set **Interactions Endpoint URL** to `<your Worker URL>/interactions` (Discord checks it responds, so deploy first).
+2. **Installation** > enable **User Install**, add the `applications.commands` scope to its install link, and make sure the install link is on.
+
+Each person then opens the **Claude** tab on the site and clicks **Add to Discord** (or uses your install link), links their Riot accounts on the **Connect** tab, and runs `/store`. Commands can take up to an hour to show up the first time.
 
 ## 3. Check your store
 

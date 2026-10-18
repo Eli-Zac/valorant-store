@@ -67,9 +67,28 @@ jobs:
           secrets: |
             DISCORD_CLIENT_ID
             DISCORD_CLIENT_SECRET
+            DISCORD_PUBLIC_KEY
         env:
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
           DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+          DISCORD_PUBLIC_KEY: ${{ secrets.DISCORD_PUBLIC_KEY }}
+
+      # Registers the /store slash command (worker/commands.json) with Discord. It uses the app's own
+      # client credentials, so no bot token is needed. Registration is global and idempotent.
+      - name: Register Discord commands
+        env:
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+        run: |
+          TOKEN=$(curl -fsS -u "$DISCORD_CLIENT_ID:$DISCORD_CLIENT_SECRET" \
+            -d grant_type=client_credentials -d scope=applications.commands.update \
+            https://discord.com/api/v10/oauth2/token | jq -r .access_token)
+          test -n "$TOKEN" && [ "$TOKEN" != null ] || { echo "Could not get a Discord token"; exit 1; }
+          curl -fsS -X PUT \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            --data @worker/commands.json \
+            "https://discord.com/api/v10/applications/$DISCORD_CLIENT_ID/commands" > /dev/null
+          echo "Registered Discord commands"
 
       # Optional: enables the "stay logged in" option for Riot login. Add a repository secret
       # RIOT_ENCRYPTION_KEY (a long random string, 32+ characters) and keep it stable.
