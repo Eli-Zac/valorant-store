@@ -1193,13 +1193,10 @@ function storeEmbeds(name, r, origin, puuid, gallery = true) {
   const url = `${origin}/store?acc=${encodeURIComponent(puuid)}`;
   const embed = { ...storeEmbed(name, r, origin), url };
   const snap = r.snap;
-  const accIcons = gallery && snap?.accessories && Date.now() < snap.accessories.ends_at * 1000
-    ? (snap.accessories.items || []).slice(0, 4).map((a) => safeIcon(a.icon)).filter(Boolean)
-    : [];
   const icons = gallery && snap && Date.now() <= snap.daily_ends_at * 1000
     ? (snap.daily || []).slice(0, 4).map((s) => safeIcon(s.icon))
     : [];
-  if (!icons.some(Boolean) && !accIcons.length) return [embed];
+  if (!icons.some(Boolean)) return [embed];
   const out = [embed];
   icons.forEach((icon, i) => {
     if (!icon) return;
@@ -1207,8 +1204,6 @@ function storeEmbeds(name, r, origin, puuid, gallery = true) {
     if (!out[0].image) out[0].image = image;
     else out.push({ url, image });
   });
-  // A different url makes Discord group the accessory images as their own gallery.
-  accIcons.forEach((icon) => out.push({ url: url + "&view=accessories", image: { url: tileUrl(icon, origin) } }));
   return out;
 }
 
@@ -1229,13 +1224,6 @@ function storeEmbed(name, r, origin) {
   }
   if (snap.wallet) embed.description += `\nWallet: ${vpText(snap.wallet.vp)} · ${Number(snap.wallet.kc).toLocaleString("en-US")} KC · ${Number(snap.wallet.rad || 0).toLocaleString("en-US")} Radianite`;
   embed.fields.push({ name: "Daily store", value: lines(snap.daily || [], (s) => (s.owned ? " ✓ owned" : "")).slice(0, 1024) || "Empty" });
-  for (const b of snap.bundles || []) {
-    if (now >= b.ends_at * 1000) continue;
-    embed.fields.push({
-      name: `Bundle: ${b.name} (ends <t:${unix(b.ends_at)}:R>)`,
-      value: `${vpText(b.vp)}${b.discount ? ` (${Number(b.discount)}% off)` : ""}\n${(b.items || []).map((it) => `${it.name}${it.owned ? " ✓" : ""}`).join(", ")}`.slice(0, 1024),
-    });
-  }
   const nm = snap.night_market;
   if (nm && now < nm.ends_at * 1000 && (nm.items || []).length) {
     embed.fields.push({
