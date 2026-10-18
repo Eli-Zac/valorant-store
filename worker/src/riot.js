@@ -116,18 +116,19 @@ async function riotJson(url, opts, what) {
   return r.json();
 }
 
-async function skinName(env, uuid) {
-  const cached = await env.STORE.get("skin:" + uuid);
+// Name and icon for a skin level, cached for 30 days.
+async function skinInfo(env, uuid) {
+  const cached = await env.STORE.get("skin2:" + uuid, "json");
   if (cached) return cached;
   try {
-    const d = await (await fetch(`${VAPI}/v1/weapons/skinlevels/${uuid}`)).json();
-    const name = d?.data?.displayName;
-    if (name) {
-      await env.STORE.put("skin:" + uuid, name, { expirationTtl: 30 * 86400 });
-      return name;
+    const d = (await (await fetch(`${VAPI}/v1/weapons/skinlevels/${uuid}`)).json())?.data;
+    if (d?.displayName) {
+      const info = { name: d.displayName, icon: d.displayIcon || null };
+      await env.STORE.put("skin2:" + uuid, JSON.stringify(info), { expirationTtl: 30 * 86400 });
+      return info;
     }
   } catch {}
-  return uuid;
+  return { name: uuid, icon: null };
 }
 
 // Reads the store with fresh tokens. Returns { snapshot, puuid, shard }. Tokens are not kept.
@@ -180,7 +181,7 @@ export async function fetchSnapshot(env, tokens) {
 
   const offers = panel.SingleItemStoreOffers || (panel.SingleItemOffers || []).map((id) => ({ Rewards: [{ ItemID: id }], Cost: {} }));
   const daily = await Promise.all(
-    offers.map(async (o) => ({ name: await skinName(env, o.Rewards[0].ItemID), vp: o.Cost?.[VP] ?? 0 }))
+    offers.map(async (o) => ({ ...(await skinInfo(env, o.Rewards[0].ItemID)), vp: o.Cost?.[VP] ?? 0 }))
   );
 
   let night_market = null;
@@ -190,7 +191,7 @@ export async function fetchSnapshot(env, tokens) {
       ends_at: now + Number(bonus.BonusStoreRemainingDurationInSeconds),
       items: await Promise.all(
         bonus.BonusStoreOffers.map(async (o) => ({
-          name: await skinName(env, o.Offer.Rewards[0].ItemID),
+          ...(await skinInfo(env, o.Offer.Rewards[0].ItemID)),
           vp: o.DiscountCosts?.[VP] ?? 0,
           discount: o.DiscountPercent,
         }))
