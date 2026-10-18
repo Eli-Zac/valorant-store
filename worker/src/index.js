@@ -191,7 +191,11 @@ background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 7
 .play{all:unset;box-sizing:border-box;position:absolute;right:.6rem;bottom:.6rem;z-index:1;width:2.2rem;height:2.2rem;cursor:pointer;background:rgba(15,25,35,.75);border:1px solid rgba(236,232,225,.35);display:grid;place-items:center;transition:background .2s}
 .play::before{content:"";border-style:solid;border-width:.4rem 0 .4rem .65rem;border-color:transparent transparent transparent #ece8e1;margin-left:.15rem}
 .play:hover{background:var(--red)}.play:focus-visible{outline:2px solid #fff;outline-offset:1px}.play[hidden]{display:none}
-.art video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;z-index:2}.art.playing .play{display:none}
+dialog.vid{border:0;padding:0;background:#000;width:min(60rem,92vw);max-height:88vh;overflow:visible}
+dialog.vid::backdrop{background:rgba(5,9,13,.82);backdrop-filter:blur(4px)}
+dialog.vid video{display:block;width:100%;max-height:88vh;background:#000}
+dialog.vid .x{all:unset;box-sizing:border-box;position:absolute;top:-2.6rem;right:0;width:2.2rem;height:2.2rem;display:grid;place-items:center;cursor:pointer;color:#ece8e1;font:400 1.8rem/1 var(--display);transition:color .2s}
+dialog.vid .x:hover{color:var(--red)}dialog.vid .x:focus-visible{outline:2px solid #fff;outline-offset:1px}
 .tags{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding:0 .95rem .6rem;font:600 .75rem/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:rgba(236,232,225,.7)}
 .tier{display:inline-flex;align-items:center;gap:.35rem;color:var(--tier,#ece8e1)}
 .vars{display:flex;gap:.4rem;flex-wrap:wrap;padding:0 .95rem .85rem}
@@ -208,10 +212,14 @@ background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 7
 @media(prefers-contrast:more){.sub,.lead{color:var(--text)}.card{box-shadow:inset 0 0 0 1px var(--text)}}
 `;
 
-const SWATCH_JS = `document.addEventListener("click",function(e){var c=e.target.closest(".skin");if(!c)return;var a=c.querySelector(".art");
-function stop(){var v=a.querySelector("video");if(v){v.remove();a.classList.remove("playing")}}
-var p=e.target.closest(".play");if(p){var u=c.dataset.video;if(!u)return;stop();var v=document.createElement("video");v.src=u;v.controls=true;v.autoplay=true;v.playsInline=true;v.addEventListener("ended",stop);a.appendChild(v);a.classList.add("playing");return}
-var b=e.target.closest(".sw");if(!b)return;stop();var i=a.querySelector("img");if(i&&b.dataset.art)i.src=b.dataset.art;c.dataset.video=b.dataset.video||"";var pl=a.querySelector(".play");if(pl)pl.hidden=!b.dataset.video;c.querySelectorAll(".sw").forEach(function(x){x.classList.toggle("on",x===b)})});`;
+const SWATCH_JS = `document.addEventListener("click",function(e){
+var d=e.target.closest("dialog.vid");if(d){if(e.target===d||e.target.closest(".x"))d.close();return}
+var c=e.target.closest(".skin");if(!c)return;var a=c.querySelector(".art");
+var p=e.target.closest(".play");if(p){var u=c.dataset.video;if(!u)return;var m=document.createElement("dialog");m.className="vid";m.setAttribute("aria-label",c.querySelector(".nm").textContent);
+var v=document.createElement("video");v.src=u;v.controls=true;v.autoplay=true;v.playsInline=true;
+var x=document.createElement("button");x.type="button";x.className="x";x.setAttribute("aria-label","Close");x.textContent="\u00d7";
+m.append(x,v);m.addEventListener("close",function(){v.pause();m.remove()});document.body.appendChild(m);m.showModal();return}
+var b=e.target.closest(".sw");if(!b)return;var i=a.querySelector("img");if(i&&b.dataset.art)i.src=b.dataset.art;c.dataset.video=b.dataset.video||"";var pl=a.querySelector(".play");if(pl)pl.hidden=!b.dataset.video;c.querySelectorAll(".sw").forEach(function(x){x.classList.toggle("on",x===b)})});`;
 const COPY_JS = `document.addEventListener("click",function(e){var b=e.target.closest("[data-copy]");if(!b)return;
 var t=b.getAttribute("data-copy"),o=b.textContent;
 (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent="Copied"},function(){b.textContent="Press Ctrl+C"});
