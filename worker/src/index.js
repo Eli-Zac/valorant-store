@@ -47,7 +47,7 @@ background:radial-gradient(60rem 36rem at 88% -8%,rgba(255,70,85,.22),transparen
 repeating-linear-gradient(115deg,transparent 0 46px,rgba(236,232,225,.022) 46px 47px)}
 body::after{content:"";position:fixed;top:-10vh;right:8vw;width:2px;height:140vh;background:linear-gradient(transparent,rgba(255,70,85,.55),transparent);transform:rotate(18deg);z-index:-1;pointer-events:none}
 nav{position:sticky;top:0;z-index:10;background:var(--nav);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-nav div{max-width:120rem;margin:0 auto;padding:0 var(--pad);height:3.5rem;display:flex;align-items:center;justify-content:space-between}
+nav>div{max-width:120rem;margin:0 auto;padding:0 var(--pad);min-height:3.5rem;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 1.5rem}
 nav a{color:var(--text);text-decoration:none;font:700 15px/1 var(--display);letter-spacing:.18em;text-transform:uppercase}
 nav a.brand{display:flex;align-items:center;gap:.7rem}
 nav a.link{color:var(--sub);position:relative;padding:.4rem 0;transition:color .2s}
@@ -115,6 +115,32 @@ pre code{background:none;padding:0}
 .copy code{background:none;padding:0;flex:1;min-width:0;font-size:14px}
 .copy button{min-height:2.2rem;padding:0 1rem;font-size:13px;--c:7px}
 em{font-style:normal;font-weight:600}
+nav a.tab{color:var(--sub);position:relative;padding:.4rem 0;transition:color .2s}
+nav a.tab::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--red);transform:scaleX(0);transform-origin:left;transition:transform .3s var(--ease)}
+nav a.tab:hover,nav a.tab.on{color:var(--text)}nav a.tab:hover::after,nav a.tab.on::after{transform:scaleX(1)}
+.tabs{display:flex;gap:2rem;margin:0 auto 0 2.5rem}
+.who{display:flex;align-items:center;gap:.9rem;font:700 13px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--sub)}.who form{margin:0}
+nav .btn,nav button{font-size:13px;min-height:2.3rem;padding:0 1.1rem;--c:8px;letter-spacing:.14em}
+nav .btn:hover{text-decoration:none}
+.strip{--cut:20px;position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:1.5rem 3.5rem;background:var(--card);padding:1.4rem 1.75rem;margin:0 0 2.5rem;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));animation:rise .6s var(--ease) both}
+.strip::before{content:"";position:absolute;left:0;top:0;bottom:var(--cut);width:3px;background:var(--red)}
+.stat{display:flex;flex-direction:column;gap:.45rem}
+.stat .k{font:700 12px/1 var(--display);letter-spacing:.2em;text-transform:uppercase;color:var(--sub)}
+.stat .v{font:800 2.1rem/1 var(--display);letter-spacing:.04em;display:inline-flex;align-items:center;gap:.5rem;font-variant-numeric:tabular-nums}
+.stat .v.clock{font-size:clamp(2.4rem,6vw,3.6rem)}
+.stat .v.bad{color:var(--amber)}
+.stat .vpi{width:1.4rem;height:1.4rem}
+.strip .tools{margin-left:auto}
+.empty{max-width:40rem}
+.cta{margin:-1.25rem 0 3rem}
+.star{grid-column:1/-1;background:linear-gradient(135deg,rgba(255,70,85,.16),transparent 55%),var(--card)}
+.star .copy{max-width:36rem;margin-bottom:0}
+.ghost .art{animation:pulse 1.8s ease-in-out infinite}.ghost:hover{transform:none}
+.ghost .bar{height:.7rem;width:55%;background:var(--fill)}.ghost .bar.s{width:18%}
+@keyframes pulse{50%{opacity:.55}}
+.asks{list-style:none;margin:0 0 1rem;padding:0}
+.asks li{padding:.8rem 1rem;margin:0 0 .6rem;background:rgba(0,0,0,.3);border-left:2px solid var(--red);font-weight:500}
+.stepno{display:block;font:800 3rem/1 var(--display);color:var(--red);margin-bottom:.5rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,26rem),1fr));gap:1.4rem;align-items:start}.grid>.card{margin:0}
 .narrow{max-width:40rem}
 .sect{margin:0 0 2.75rem}
@@ -137,6 +163,7 @@ background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 7
 @media(min-width:46rem){.skins{grid-template-columns:repeat(4,minmax(0,1fr))}.skins.nm{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(min-width:84rem){.skins.nm{grid-template-columns:repeat(6,minmax(0,1fr))}}
 @media(max-width:34rem){main{padding-top:2.75rem}.meta{flex-direction:column;align-items:flex-start;gap:.45rem}.card{--cut:14px;padding:1.3rem}.head{align-items:flex-start;flex-direction:column;gap:.7rem}body::after{display:none}}
+@media(max-width:40rem){.tabs{order:3;width:100%;margin:0;gap:0;justify-content:space-between;border-top:1px solid var(--line)}nav a.tab{flex:1;text-align:center;padding:.85rem 0}nav a.tab::after{bottom:0}.who span{display:none}nav>div{min-height:3.25rem}.strip{padding:1.1rem 1.2rem;gap:1.1rem 1.8rem}.strip .tools{margin-left:0;width:100%}.cta .btn{flex:1 1 100%}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:opacity .2s!important}.btn:active,button:active{transform:none}}
 @media(prefers-reduced-transparency:reduce){nav{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--bg)}}
 @media(prefers-contrast:more){.sub,.lead{color:var(--text)}.card{box-shadow:inset 0 0 0 1px var(--text)}}
@@ -147,10 +174,30 @@ var t=b.getAttribute("data-copy"),o=b.textContent;
 (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent="Copied"},function(){b.textContent="Press Ctrl+C"});
 setTimeout(function(){b.textContent=o},1600)});`;
 
-const TICK_JS = `(function(){function f(ms){var m=Math.max(0,Math.floor(ms/6e4)),d=Math.floor(m/1440),h=Math.floor(m%1440/60);m%=60;return(d?d+"d ":"")+((d||h)?h+"h ":"")+m+"m"}
-function t(){document.querySelectorAll("[data-end]").forEach(function(e){var l=e.getAttribute("data-end")*1000-Date.now();e.textContent=l>0?e.getAttribute("data-pre")+" "+f(l):"Rotated"})}t();setInterval(t,3e4)})();`;
+const TICK_JS = `(function(){function p(n){return(n<10?"0":"")+n}
+function f(ms){var m=Math.max(0,Math.floor(ms/6e4)),d=Math.floor(m/1440),h=Math.floor(m%1440/60);m%=60;return(d?d+"d ":"")+((d||h)?h+"h ":"")+m+"m"}
+function t(){var n=Date.now();
+document.querySelectorAll("[data-clock]").forEach(function(e){var s=Math.max(0,Math.floor((e.getAttribute("data-clock")*1000-n)/1e3));e.textContent=p(Math.floor(s/3600))+":"+p(Math.floor(s%3600/60))+":"+p(s%60)});
+document.querySelectorAll("[data-end]").forEach(function(e){var l=e.getAttribute("data-end")*1000-n;e.textContent=l>0?e.getAttribute("data-pre")+" "+f(l):"Ended"})}
+t();setInterval(t,1e3)})();`;
 
-// opts: { lead } is the subtitle under the heading (trusted HTML), { heading } overrides the h1 text.
+const TABS = [
+  ["store", "Store", "/account"],
+  ["connect", "Connect", "/account/connect"],
+  ["claude", "Claude", "/account/claude"],
+];
+
+function navHtml(n) {
+  const brand = `<a class="brand" href="${n ? "/account" : "/"}"><span class="mark"></span>Valorant Store</a>`;
+  if (!n) return `<nav><div>${brand}<a class="btn sm" href="/account">Sign in</a></div></nav>`;
+  const tabs = TABS.map(
+    ([k, label, href]) => `<a class="tab${n.tab === k ? " on" : ""}" href="${href}"${n.tab === k ? ' aria-current="page"' : ""}>${label}</a>`
+  ).join("");
+  return `<nav><div>${brand}<div class="tabs">${tabs}</div><div class="who"><span>${esc(n.login)}</span><form method="post" action="/account/signout"><input type="hidden" name="csrf" value="${esc(n.csrf)}"><button class="sec sm">Sign out</button></form></div></div></nav>`;
+}
+
+// opts: { lead } is the subtitle under the heading (trusted HTML), { heading } overrides the h1 text,
+// { docTitle } overrides the <title>, { nav } shows the signed-in tabs.
 function page(title, body, status = 200, headers = new Headers(), opts = {}) {
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("Cache-Control", "no-store");
@@ -160,9 +207,9 @@ function page(title, body, status = 200, headers = new Headers(), opts = {}) {
 <meta name="theme-color" content="#0f1923">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap">
-<title>${esc(title)}</title>
+<title>${esc(opts.docTitle ?? title + " \u00b7 Valorant Store")}</title>
 <style>${STYLE}</style>
-<nav><div><a class="brand" href="/"><span class="mark"></span>Store Connector</a><a class="link" href="/account">Account</a></div></nav>
+${navHtml(opts.nav)}
 <main>
 <h1>${esc(opts.heading ?? title)}</h1>
 ${opts.lead ? `<p class="lead">${opts.lead}</p>` : ""}
@@ -174,7 +221,7 @@ ${body}
 
 // ---------- GitHub ----------
 
-const UA = "valorant-store-mcp";
+const UA = "valorant-store";
 
 function githubAuthorizeUrl(env, origin, state, challenge) {
   const u = new URL("https://github.com/login/oauth/authorize");
@@ -460,6 +507,12 @@ const fmtLeft = (ms) => {
   return (d ? d + "d " : "") + (d || h ? h + "h " : "") + m + "m";
 };
 
+const fmtClock = (ms) => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
+};
+
 function skinCard(s, i) {
   const icon = safeIcon(s.icon);
   const off = Number(s.discount) || 0;
@@ -469,66 +522,96 @@ function skinCard(s, i) {
 </article>`;
 }
 
-async function dashboard(env, sess, origin, flash = "", preloaded = null) {
+// A signed-in page: same shell plus the Store / Connect / Claude tabs and a sign-out button.
+const acct = (sess, tab, title, body, opts = {}) =>
+  page(title, body, 200, new Headers(), { ...opts, nav: { tab, login: sess.login, csrf: sess.csrf } });
+
+const flashBox = (flash) =>
+  flash ? `<div class="notice${/^(Done|Disconnected)/.test(flash) ? "" : " warn"}" role="status">${esc(flash)}</div>` : "";
+
+// ---------- Store tab: the main screen ----------
+
+async function storeView(env, sess, origin, flash = "", preloaded = null) {
   const loaded = preloaded ?? (await loadSnapshot(env, sess.userId));
   const snap = loaded.snap;
-  const [user, riot] = await Promise.all([
+  const riot = await env.STORE.get("riot:" + sess.userId, "json");
+  const now = Date.now();
+  const ago = (ms) => `${fmtDur(now - ms)} ago`;
+  const csrf = `<input type="hidden" name="csrf" value="${esc(sess.csrf)}">`;
+  const warn = (t) => `<div class="notice warn" role="status">${esc(t)}</div>`;
+
+  let note = "";
+  if (!preloaded) {
+    if (loaded.expired) note = warn("Your saved Riot login has expired. Reconnect on the Connect tab.");
+    else if (loaded.failed) note = warn("Could not refresh from Riot" + (loaded.error ? ": " + loaded.error : "."));
+  }
+
+  let body;
+  if (!snap) {
+    body = `${note}<section class="card empty">
+<div class="head"><h2>No store yet</h2></div>
+<p class="sub">Link your Riot account once and your daily skins and Night Market show up here.</p>
+<div class="actions"><a class="btn" href="/account/connect">Connect Riot account</a></div>
+</section>`;
+  } else {
+    const stale = now > snap.daily_ends_at * 1000;
+    const nm = snap.night_market;
+    const nmLive = nm && now < nm.ends_at * 1000 && (nm.items || []).length;
+    const total = (snap.daily || []).reduce((n, s) => n + (Number(s.vp) || 0), 0);
+    const tool = riot?.sealed
+      ? `<form method="post" action="/account/refresh">${csrf}<button class="sec sm">Refresh</button></form>`
+      : `<a class="btn sec sm" href="/account/connect">Update store</a>`;
+    body = `${note}<div class="strip">
+<div class="stat"><span class="k">Resets in</span>${
+      stale
+        ? '<span class="v bad">Out of date</span>'
+        : `<span class="v clock" data-clock="${Number(snap.daily_ends_at)}">${fmtClock(snap.daily_ends_at * 1000 - now)}</span>`
+    }</div>
+<div class="stat"><span class="k">Daily total</span><span class="v"><img class="vpi" src="${VP_ICON}" alt="VP" width="22" height="22">${total.toLocaleString("en-US")}</span></div>
+<div class="stat"><span class="k">Updated</span><span class="v">${esc(ago(snap.fetched_at * 1000))}</span></div>
+<div class="tools">${tool}</div>
+</div>
+${stale ? `<p class="sub" style="margin:0 0 1rem">This snapshot is from ${esc(ago(snap.fetched_at * 1000))}, before the store rotated. ${riot?.sealed ? "Hit Refresh." : "Update it from the Connect tab."}</p>` : ""}
+<section class="sect${stale ? " stale" : ""}">
+<div class="head"><h2>Daily store</h2></div>
+<div class="skins">${(snap.daily || []).map((s, i) => skinCard(s, i)).join("")}</div>
+</section>
+${
+  nmLive
+    ? `<section class="sect">
+<div class="head"><h2>Night Market</h2><div class="tools"><span class="badge warn" data-end="${Number(nm.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(nm.ends_at * 1000 - now)}</span></div></div>
+<div class="skins nm">${nm.items.map((s, i) => skinCard(s, i)).join("")}</div>
+</section>`
+    : ""
+}`;
+  }
+  return acct(sess, "store", "Today's store", flashBox(flash) + body, { lead: `Signed in as <strong>${esc(sess.login)}</strong>.` });
+}
+
+// ---------- Connect tab: link Riot, PC script, disconnect ----------
+
+async function connectView(env, sess, origin, flash = "") {
+  const [user, riot, snap] = await Promise.all([
     env.STORE.get("user:" + sess.userId, "json"),
     env.STORE.get("riot:" + sess.userId, "json"),
+    env.STORE.get("snap:" + sess.userId, "json"),
   ]);
-  const now = Date.now();
   const ago = (ms) => `${fmtDur(Date.now() - ms)} ago`;
   const [riotLabel, riotTone, riotText] = !riot
-    ? ["Not connected", "", "Log in with Riot to let Claude read your store."]
+    ? ["Not connected", "", "Log in with Riot to load your store."]
     : riot.sealed
       ? ["Staying logged in", "ok", `Connected ${ago(riot.connected)}. Your store refreshes itself when it rotates.`]
       : riot.expired
         ? ["Expired", "bad", "The saved login expired. Reconnect below."]
         : ["Connected", "warn", `Connected once, ${ago(riot.connected)}. It will not refresh by itself.`];
-  const snapStatus = snap ? `Last store snapshot: ${ago(snap.fetched_at * 1000)}.` : "No store snapshot yet.";
   const csrf = `<input type="hidden" name="csrf" value="${esc(sess.csrf)}">`;
-
-  // ----- the store itself -----
-  const warn = (t) => `<div class="notice warn" role="status">${esc(t)}</div>`;
-  let storeNote = "";
-  if (!preloaded) {
-    if (loaded.expired) storeNote = warn("Your saved Riot login has expired. Reconnect below.");
-    else if (loaded.failed) storeNote = warn("Could not refresh from Riot" + (loaded.error ? ": " + loaded.error : "."));
-  }
-  const refresh = riot?.sealed
-    ? `<form method="post" action="/account/refresh">${csrf}<button class="sec sm">Refresh</button></form>`
-    : "";
-  let store;
-  if (!snap) {
-    store = `<section class="sect"><div class="card"><div class="head"><h2>Daily store</h2></div>
-<p class="sub">No store yet. Log in with Riot below, or run the PC script, and your skins show up here.</p></div></section>`;
-  } else {
-    const stale = now > snap.daily_ends_at * 1000;
-    const nm = snap.night_market;
-    const nmLive = nm && now < nm.ends_at * 1000 && (nm.items || []).length;
-    store = `<section class="sect${stale ? " stale" : ""}">
-<div class="head"><h2>Daily store</h2><div class="tools">${
-      stale
-        ? '<span class="badge warn">Out of date</span>'
-        : `<span class="badge ok" data-end="${Number(snap.daily_ends_at)}" data-pre="Rotates in">Rotates in ${fmtLeft(snap.daily_ends_at * 1000 - now)}</span>`
-    }${refresh}</div></div>
-${storeNote}${stale ? `<p class="sub" style="margin:0 0 1rem">This snapshot is from ${ago(snap.fetched_at * 1000)}, before the store rotated. ${riot?.sealed ? "Hit Refresh." : "Log in with Riot below to update it."}</p>` : ""}
-<div class="skins">${(snap.daily || []).map((s, i) => skinCard(s, i)).join("")}</div>
-</section>
-${nmLive ? `<section class="sect">
-<div class="head"><h2>Night Market</h2><div class="tools"><span class="badge warn" data-end="${Number(nm.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(nm.ends_at * 1000 - now)}</span></div></div>
-<div class="skins nm">${nm.items.map((s, i) => skinCard(s, i)).join("")}</div>
-</section>` : ""}`;
-  }
-  if (!snap && storeNote) store = storeNote + store;
-
   const stay = env.RIOT_ENCRYPTION_KEY
     ? `<details>
 <summary>Stay logged in</summary>
 <div class="body">
 <p class="sub">Paste the <em>value</em> of each Riot login cookie from auth.riotgames.com. <code>ssid</code> is required, the others make it last longer.
 Find them in your browser's developer tools under Application or Storage, then Cookies.
-They are saved encrypted and only used when you ask Claude for your store and today's snapshot is out of date.
+They are saved encrypted and only used when you open your store (or ask Claude for it) and today's snapshot is out of date.
 They usually last 1 to 3 weeks before you need to reconnect. Anyone with these cookies can act as your Riot account,
 so only turn this on if you trust whoever runs this server.</p>
 <label class="switch">Keep me logged in<input type="checkbox" name="stay" value="1"></label>
@@ -542,11 +625,11 @@ ${["ssid", "clid", "csid", "tdid"]
 </details>`
     : "";
 
-  return page(
-    "Your store",
-    `${flash ? `<div class="notice${/^(Done|Disconnected)/.test(flash) ? "" : " warn"}" role="status">${esc(flash)}</div>` : ""}
-${store}
-<div class="grid">
+  return acct(
+    sess,
+    "connect",
+    "Connect",
+    `${flashBox(flash)}<div class="grid">
 <section class="card">
 <div class="head"><h2>Riot login</h2><span class="badge ${riotTone}">${esc(riotLabel)}</span></div>
 <p class="sub">${esc(riotText)}</p>
@@ -566,15 +649,49 @@ ${stay}
 <p class="sub">Run a small script on your PC to push your store here. Creating a new key replaces the old one.</p>
 <form method="post" action="/account/pc-key">${csrf}<div class="actions"><button class="sec">Create PC key</button></div></form>
 </section>
-${riot || snap ? `<section class="card">
+${
+  riot || snap
+    ? `<section class="card">
 <div class="head"><h2>Disconnect</h2></div>
 <p class="sub">Deletes your saved Riot connection and store snapshot from this server.</p>
 <form method="post" action="/account/disconnect">${csrf}<div class="actions"><button class="danger">Delete my Riot connection and snapshot</button></div></form>
-</section>` : ""}
+</section>`
+    : ""
+}
 </div>`,
-    200,
-    new Headers(),
-    { lead: `Signed in as <strong>${esc(sess.login)}</strong>. ${esc(snapStatus)}` }
+    { lead: "Link your Riot account so your store can load. Use a Riot login, or the PC script." }
+  );
+}
+
+// ---------- Claude tab: the MCP connector ----------
+
+function claudeView(sess, origin) {
+  const url = `${origin}/mcp`;
+  return acct(
+    sess,
+    "claude",
+    "Ask Claude",
+    `<div class="grid">
+<section class="card">
+<div class="head"><h2>Add the connector</h2><span class="badge bad">MCP</span></div>
+<ol class="steps">
+<li>Copy the connector URL.
+<div class="copy"><code>${esc(url)}</code><button type="button" data-copy="${esc(url)}">Copy</button></div></li>
+<li>In Claude, add a custom connector with that URL.</li>
+<li>Click Connect, sign in with GitHub, and approve.</li>
+</ol>
+</section>
+<section class="card">
+<div class="head"><h2>Then just ask</h2></div>
+<ul class="asks">
+<li>What's in my Valorant store?</li>
+<li>Is the Night Market live?</li>
+<li>How long until my store resets?</li>
+</ul>
+<p class="sub">Works in Claude on web, desktop and mobile with the same account. You need to link your Riot account first, on the Connect tab.</p>
+</section>
+</div>`,
+    { lead: "This site is also a Claude connector (MCP). Add it once and ask for your store in plain language, from any device." }
   );
 }
 
@@ -586,14 +703,16 @@ async function mintPcKey(env, sess, origin) {
   await env.STORE.put("pk:" + hash, sess.userId);
   await env.STORE.put("user:" + sess.userId, JSON.stringify({ login: sess.login, pk_hash: hash, updated: Date.now() }));
   const cfg = JSON.stringify({ worker_url: origin, key }, null, 2);
-  return page(
+  return acct(
+    sess,
+    "connect",
     "PC setup key",
     `<section class="card narrow">
 <p>Save this as <code>config.json</code> next to <code>push_store.py</code> on your PC. It is shown once.</p>
 <pre><code>${esc(cfg)}</code></pre>
 <button type="button" class="sec" data-copy="${esc(cfg)}">Copy</button>
 <p class="sub" style="margin-top:1rem">Then run <code>python push_store.py</code> with the Riot Client open, and <code>setup_task.ps1</code> to keep it updated.</p>
-<div class="actions"><a class="btn" href="/account">Done</a></div>
+<div class="actions"><a class="btn" href="/account/connect">Done</a></div>
 </section>`
   );
 }
@@ -630,21 +749,21 @@ async function connectRiot(env, sess, form, origin) {
   }
 
   if (!tokens) {
-    return dashboard(env, sess, origin, "Nothing usable was pasted. Copy the whole address after logging in, it contains access_token=." + warn);
+    return connectView(env, sess, origin, "Nothing usable was pasted. Copy the whole address after logging in, it contains access_token=." + warn);
   }
 
   let result;
   try {
     result = await fetchSnapshot(env, tokens);
   } catch (e) {
-    return dashboard(env, sess, origin, (e instanceof RiotError ? e.message : "Could not read the store.") + warn);
+    return connectView(env, sess, origin, (e instanceof RiotError ? e.message : "Could not read the store.") + warn);
   }
 
   await env.STORE.put("snap:" + uid, JSON.stringify(result.snapshot));
   const rec = { puuid: result.puuid, shard: result.shard, connected: Date.now() };
   if (sealed) rec.sealed = sealed;
   await env.STORE.put("riot:" + uid, JSON.stringify(rec));
-  return dashboard(env, sess, origin, "Done. Ask Claude for your Valorant store." + warn);
+  return storeView(env, sess, origin, "Done. Your store is loaded. You can also ask Claude for it." + warn);
 }
 
 async function accountPost(request, env, url) {
@@ -662,18 +781,21 @@ async function accountPost(request, env, url) {
     case "/account/refresh": {
       const r = await loadSnapshot(env, sess.userId, { force: true });
       const flash = r.expired
-        ? "Your saved Riot login has expired. Reconnect below."
+        ? "Your saved Riot login has expired. Reconnect on the Connect tab."
         : r.failed
           ? "Could not refresh from Riot" + (r.error ? ": " + r.error : ".")
           : r.attempted
             ? "Done. Store refreshed."
-            : "Nothing to refresh. Log in with Riot below.";
-      return dashboard(env, sess, url.origin, flash, r);
+            : "Nothing to refresh. Link your Riot account on the Connect tab first.";
+      return storeView(env, sess, url.origin, flash, r);
     }
+    case "/account/signout":
+      await env.STORE.delete("sess:" + sess.id);
+      return new Response(null, { status: 302, headers: { Location: "/", "Set-Cookie": setCookie(SESS_COOKIE, "", 0) } });
     case "/account/disconnect":
       await env.STORE.delete("riot:" + sess.userId);
       await env.STORE.delete("snap:" + sess.userId);
-      return dashboard(env, sess, url.origin, "Disconnected. Your Riot connection and store snapshot were deleted.");
+      return connectView(env, sess, url.origin, "Disconnected. Your Riot connection and store snapshot were deleted.");
     default:
       return new Response("not found", { status: 404 });
   }
@@ -755,24 +877,59 @@ async function callback(request, env) {
 
 // ---------- default (non-API) handler ----------
 
-const home = (origin) =>
+const ghostCard = (i) => `<article class="skin ghost" style="--i:${i}">
+<div class="art none"></div>
+<div class="meta"><span class="bar"></span><span class="bar s"></span></div>
+</article>`;
+
+const landing = (origin) =>
   page(
-    "Valorant store connector",
-    `<div class="grid">
+    "Valorant Store",
+    `<div class="actions cta"><a class="btn" href="/account">Sign in with GitHub</a><a class="btn sec" href="#features">See what you get</a></div>
+
+<section class="sect" aria-label="Preview">
+<div class="skins">${[0, 1, 2, 3].map(ghostCard).join("")}</div>
+</section>
+
+<section class="sect" id="features">
+<div class="head"><h2>What you get</h2></div>
+<div class="grid feat">
 <section class="card">
-<div class="head"><h2>1. Add the connector</h2></div>
-<p class="sub">In Claude, add a custom connector with this URL and sign in with GitHub.</p>
+<div class="head"><h2>Daily store</h2></div>
+<p class="sub">Your four daily skins with their art and VP prices, as soon as you open the page.</p>
+</section>
+<section class="card">
+<div class="head"><h2>Night Market</h2></div>
+<p class="sub">When it is live, every item with its discount, plus how long it has left.</p>
+</section>
+<section class="card">
+<div class="head"><h2>Live reset timer</h2></div>
+<p class="sub">A countdown to the next store rotation, and a one-tap refresh if you stay logged in.</p>
+</section>
+<section class="card star">
+<div class="head"><h2>Ask Claude (MCP)</h2><span class="badge bad">Key feature</span></div>
+<p>This site is also a Claude connector, built on the Model Context Protocol (MCP). Add it once and ask Claude <em>"What's in my Valorant store?"</em> from the web, desktop or your phone.</p>
 <div class="copy"><code>${esc(origin)}/mcp</code><button type="button" data-copy="${esc(origin)}/mcp">Copy</button></div>
+<div class="actions"><a class="btn sec sm" href="/account/claude">Setup guide</a></div>
 </section>
-<section class="card">
-<div class="head"><h2>2. Connect Riot</h2></div>
-<p class="sub">Log in with Riot, or run the PC script, so Claude and this site can read your store.</p>
-<div class="actions"><a class="btn" href="/account">Connect Riot account</a></div>
+</div>
 </section>
-</div>`,
+
+<section class="sect">
+<div class="head"><h2>How it works</h2></div>
+<div class="grid">
+<section class="card"><span class="stepno">01</span><h2>Sign in</h2><p class="sub">Use your GitHub account. Only your username and id are kept.</p></section>
+<section class="card"><span class="stepno">02</span><h2>Link Riot</h2><p class="sub">Log in on Riot's own page, or run the PC script. This site never sees your password.</p></section>
+<section class="card"><span class="stepno">03</span><h2>Check your store</h2><p class="sub">Open it here on the web, or ask Claude through the MCP connector.</p></section>
+</div>
+</section>`,
     200,
     new Headers(),
-    { heading: "Your Valorant store, in Claude.", lead: "Ask Claude what is in your daily store or Night Market, from any device." }
+    {
+      docTitle: "Valorant Store",
+      heading: "Check your Valorant store.",
+      lead: "Today's skins, the Night Market and a live reset timer, on any device. Prefer to ask in plain language? It works as a Claude connector (MCP) too.",
+    }
   );
 
 const defaultHandler = {
@@ -784,13 +941,18 @@ const defaultHandler = {
         if (request.method === "POST") return await authorizePost(request, env);
       }
       if (url.pathname === "/callback" && request.method === "GET") return await callback(request, env);
-      if (url.pathname === "/account" && request.method === "GET") {
+      if (["/account", "/account/connect", "/account/claude"].includes(url.pathname) && request.method === "GET") {
         const sess = await getSession(request, env);
-        return sess ? await dashboard(env, sess, url.origin) : await startAccount(request, env);
+        if (!sess) return await startAccount(request, env);
+        if (url.pathname === "/account/connect") return await connectView(env, sess, url.origin);
+        if (url.pathname === "/account/claude") return claudeView(sess, url.origin);
+        return await storeView(env, sess, url.origin);
       }
       if (url.pathname.startsWith("/account/") && request.method === "POST") return await accountPost(request, env, url);
       if (url.pathname === "/push" && request.method === "POST") return await handlePush(request, env);
-      if (url.pathname === "/") return home(url.origin);
+      if (url.pathname === "/") {
+        return (await getSession(request, env)) ? Response.redirect(url.origin + "/account", 302) : landing(url.origin);
+      }
       return new Response("not found", { status: 404 });
     } catch (error) {
       if (error instanceof AuthorizationError && error.redirectTo) {
