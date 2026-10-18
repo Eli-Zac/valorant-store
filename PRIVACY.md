@@ -25,7 +25,7 @@ We do not collect payment details, we do not sell or share your data for adverti
 
 - **Cloudflare** hosts the service and stores your data in its Workers KV database. Cloudflare also processes technical request data such as your IP address.
 - **Discord** handles sign-in. **Riot Games** receives the requests we make to read your store.
-- **Google Fonts** and **valorant-api.com** are loaded by your browser for fonts and skin images, so they can see your IP address and browser details when you visit.
+- **Google Fonts** and **valorant-api.com** are loaded by your browser for fonts and skin images, so they can see your IP address and browser details when you visit. If you press play on a skin preview, your browser also loads that video from Riot's content servers (valorant.dyn.riotcdn.net), which can see the same.
 
 ## How long we keep it
 
