@@ -53,11 +53,12 @@ def _detect_shard(default="ap"):
     return default
 
 
-def _skin_name(uuid):
+def _skin(uuid):
     try:
-        return _get_json(f"https://valorant-api.com/v1/weapons/skinlevels/{uuid}")["data"]["displayName"]
+        d = _get_json(f"https://valorant-api.com/v1/weapons/skinlevels/{uuid}")["data"]
+        return {"name": d["displayName"], "icon": d.get("displayIcon")}
     except Exception:
-        return uuid
+        return {"name": uuid, "icon": None}
 
 
 def fetch_store(shard=None):
@@ -90,7 +91,7 @@ def fetch_store(shard=None):
         "fetched_at": now,
         "daily_ends_at": now + int(panel["SingleItemOffersRemainingDurationInSeconds"]),
         "daily": [
-            {"name": _skin_name(o["Rewards"][0]["ItemID"]), "vp": o["Cost"].get(VP, 0)}
+            {**_skin(o["Rewards"][0]["ItemID"]), "vp": o["Cost"].get(VP, 0)}
             for o in panel["SingleItemStoreOffers"]
         ],
         "night_market": None,
@@ -102,7 +103,7 @@ def fetch_store(shard=None):
             "ends_at": now + int(bonus["BonusStoreRemainingDurationInSeconds"]),
             "items": [
                 {
-                    "name": _skin_name(o["Offer"]["Rewards"][0]["ItemID"]),
+                    **_skin(o["Offer"]["Rewards"][0]["ItemID"]),
                     "vp": o["DiscountCosts"].get(VP, 0),
                     "discount": o["DiscountPercent"],
                 }

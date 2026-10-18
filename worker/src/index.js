@@ -23,12 +23,16 @@ const b64url = (buf) =>
   btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const s256 = async (v) => b64url(await crypto.subtle.digest("SHA-256", enc.encode(v)));
 
+const ICON_RE = /^https:\/\/media\.valorant-api\.com\/[\w\/.-]{1,200}$/;
+const safeIcon = (u) => (typeof u === "string" && ICON_RE.test(u) ? u : null);
+const VP_ICON = "https://media.valorant-api.com/currencies/85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741/displayicon.png";
+
 const esc = (v) => String(v).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
 
 const STYLE = `
-:root{color-scheme:dark;
+:root{color-scheme:dark;--pad:clamp(1.25rem,4vw,3.5rem);
 --bg:#0f1923;--card:#16222d;--card2:#1b2a37;--text:#ece8e1;--sub:#8b978f;--line:rgba(236,232,225,.14);--fill:rgba(236,232,225,.07);
 --blue:#ff4655;--blue-h:#ff6270;--red:#ff4655;--green:#3ddc97;--green-bg:rgba(61,220,151,.13);--red-bg:rgba(255,70,85,.14);--amber:#ffc24b;--amber-bg:rgba(255,194,75,.14);
 --nav:rgba(15,25,35,.78);--shadow:none;
@@ -43,18 +47,18 @@ background:radial-gradient(60rem 36rem at 88% -8%,rgba(255,70,85,.22),transparen
 repeating-linear-gradient(115deg,transparent 0 46px,rgba(236,232,225,.022) 46px 47px)}
 body::after{content:"";position:fixed;top:-10vh;right:8vw;width:2px;height:140vh;background:linear-gradient(transparent,rgba(255,70,85,.55),transparent);transform:rotate(18deg);z-index:-1;pointer-events:none}
 nav{position:sticky;top:0;z-index:10;background:var(--nav);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-nav div{max-width:46rem;margin:0 auto;padding:0 1.25rem;height:3.5rem;display:flex;align-items:center;justify-content:space-between}
+nav div{max-width:120rem;margin:0 auto;padding:0 var(--pad);height:3.5rem;display:flex;align-items:center;justify-content:space-between}
 nav a{color:var(--text);text-decoration:none;font:700 15px/1 var(--display);letter-spacing:.18em;text-transform:uppercase}
 nav a.brand{display:flex;align-items:center;gap:.7rem}
 nav a.link{color:var(--sub);position:relative;padding:.4rem 0;transition:color .2s}
 nav a.link::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--red);transform:scaleX(0);transform-origin:left;transition:transform .3s var(--ease)}
 nav a.link:hover{color:var(--text)}nav a.link:hover::after{transform:scaleX(1)}
 .mark{width:.9rem;height:1.35rem;background:var(--red);clip-path:polygon(35% 0,100% 0,65% 100%,0 100%);display:inline-block}
-main{max-width:46rem;margin:0 auto;padding:4.5rem 1.25rem 6rem}
-h1{font:800 clamp(2.9rem,12vw,5.6rem)/.92 var(--display);text-transform:uppercase;letter-spacing:.005em;margin:0 0 1.2rem;text-wrap:balance;position:relative}
+main{max-width:120rem;margin:0 auto;padding:4.5rem var(--pad) 6rem}
+h1{font:800 clamp(2.9rem,10vw,7rem)/.92 var(--display);text-transform:uppercase;letter-spacing:.005em;margin:0 0 1.2rem;text-wrap:balance;position:relative}
 h1::before{content:"";display:block;width:3.2rem;height:.4rem;background:var(--red);margin-bottom:1.2rem;transform-origin:left;animation:bar .7s var(--ease) both}
 @keyframes bar{from{transform:scaleX(0)}}
-.lead{font-size:clamp(1.05rem,2.6vw,1.25rem);line-height:1.5;color:var(--sub);margin:0 0 2.75rem;max-width:34rem;text-wrap:pretty}
+.lead{font-size:clamp(1.05rem,2.6vw,1.25rem);line-height:1.5;color:var(--sub);margin:0 0 2.75rem;max-width:40rem;text-wrap:pretty}
 .lead strong{color:var(--text)}
 h2{font:700 1.65rem/1 var(--display);text-transform:uppercase;letter-spacing:.06em;margin:0}
 p{margin:0 0 1rem}p:last-child{margin-bottom:0}
@@ -111,7 +115,28 @@ pre code{background:none;padding:0}
 .copy code{background:none;padding:0;flex:1;min-width:0;font-size:14px}
 .copy button{min-height:2.2rem;padding:0 1rem;font-size:13px;--c:7px}
 em{font-style:normal;font-weight:600}
-@media(max-width:34rem){main{padding-top:2.75rem}.card{--cut:14px;padding:1.3rem}.head{align-items:flex-start;flex-direction:column;gap:.7rem}body::after{display:none}}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,26rem),1fr));gap:1.4rem;align-items:start}.grid>.card{margin:0}
+.narrow{max-width:40rem}
+.sect{margin:0 0 2.75rem}
+.tools{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}.tools form{margin:0}
+.sm{min-height:2.3rem;padding:0 1.1rem;font-size:13px;--c:8px}
+.notice.warn{background:var(--amber-bg);border-left-color:var(--amber)}
+.skins{display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr))}
+.skin{--cut:12px;position:relative;display:flex;flex-direction:column;background:#101820;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));transition:transform .35s var(--ease);animation:rise .6s var(--ease) both;animation-delay:calc(var(--i,0)*70ms)}
+.skin:hover{transform:translateY(-4px)}
+.art{position:relative;aspect-ratio:16/10;display:grid;place-items:center;padding:1rem;overflow:hidden;
+background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 70%),linear-gradient(180deg,#39414a 0%,#3a3532 55%,#7a4a26 100%)}
+.art img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 8px 10px rgba(0,0,0,.5));transition:transform .5s var(--ease)}
+.skin:hover .art img{transform:scale(1.07) rotate(-1.5deg)}
+.art.none::after{content:"";width:2.6rem;height:2.6rem;border:2px solid rgba(236,232,225,.22);transform:rotate(45deg)}
+.meta{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.8rem .95rem;border-top:1px solid rgba(236,232,225,.08)}
+.meta .nm{min-width:0;font:700 .95rem/1.15 var(--display);letter-spacing:.08em;text-transform:uppercase}
+.vp{flex:none;display:inline-flex;align-items:center;gap:.35rem;font:700 1.05rem/1 var(--display);letter-spacing:.04em}.vp img{width:1rem;height:1rem}
+.off{position:absolute;top:.6rem;left:.6rem;z-index:1;background:var(--red);color:#fff;font:800 .9rem/1 var(--display);letter-spacing:.08em;padding:.3rem .5rem}
+.stale .skin{opacity:.5;filter:saturate(.4)}
+@media(min-width:46rem){.skins{grid-template-columns:repeat(4,minmax(0,1fr))}.skins.nm{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(min-width:84rem){.skins.nm{grid-template-columns:repeat(6,minmax(0,1fr))}}
+@media(max-width:34rem){main{padding-top:2.75rem}.meta{flex-direction:column;align-items:flex-start;gap:.45rem}.card{--cut:14px;padding:1.3rem}.head{align-items:flex-start;flex-direction:column;gap:.7rem}body::after{display:none}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:opacity .2s!important}.btn:active,button:active{transform:none}}
 @media(prefers-reduced-transparency:reduce){nav{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--bg)}}
 @media(prefers-contrast:more){.sub,.lead{color:var(--text)}.card{box-shadow:inset 0 0 0 1px var(--text)}}
@@ -121,6 +146,9 @@ const COPY_JS = `document.addEventListener("click",function(e){var b=e.target.cl
 var t=b.getAttribute("data-copy"),o=b.textContent;
 (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent="Copied"},function(){b.textContent="Press Ctrl+C"});
 setTimeout(function(){b.textContent=o},1600)});`;
+
+const TICK_JS = `(function(){function f(ms){var m=Math.max(0,Math.floor(ms/6e4)),d=Math.floor(m/1440),h=Math.floor(m%1440/60);m%=60;return(d?d+"d ":"")+((d||h)?h+"h ":"")+m+"m"}
+function t(){document.querySelectorAll("[data-end]").forEach(function(e){var l=e.getAttribute("data-end")*1000-Date.now();e.textContent=l>0?e.getAttribute("data-pre")+" "+f(l):"Rotated"})}t();setInterval(t,3e4)})();`;
 
 // opts: { lead } is the subtitle under the heading (trusted HTML), { heading } overrides the h1 text.
 function page(title, body, status = 200, headers = new Headers(), opts = {}) {
@@ -140,7 +168,7 @@ function page(title, body, status = 200, headers = new Headers(), opts = {}) {
 ${opts.lead ? `<p class="lead">${opts.lead}</p>` : ""}
 ${body}
 </main>
-<script>${COPY_JS}</script></html>`;
+<script>${COPY_JS}${TICK_JS}</script></html>`;
   return new Response(html, { status, headers });
 }
 
@@ -226,33 +254,41 @@ function render(snap, origin) {
   return lines.join("\n");
 }
 
-// Returns the store text. If the snapshot is missing or the store has rotated and the user chose
-// "stay logged in", refresh it from Riot using their saved (encrypted) cookies.
-async function getStoreText(env, userId, origin) {
-  let snap = await env.STORE.get("snap:" + userId, "json");
-  let note = "";
-  if (!snap || Date.now() > snap.daily_ends_at * 1000) {
-    const rec = await env.STORE.get("riot:" + userId, "json");
-    if (rec?.sealed && env.RIOT_ENCRYPTION_KEY) {
-      try {
-        const r = await reauth(await unseal(env.RIOT_ENCRYPTION_KEY, rec.sealed));
-        snap = (await fetchSnapshot(env, r.tokens)).snapshot;
-        await env.STORE.put("snap:" + userId, JSON.stringify(snap));
-        await env.STORE.put(
-          "riot:" + userId,
-          JSON.stringify({ ...rec, sealed: await seal(env.RIOT_ENCRYPTION_KEY, r.cookies), refreshed: Date.now() })
-        );
-      } catch (e) {
-        if (e instanceof RiotError && e.code === "session_expired") {
-          note = `\n\nYour saved Riot login has expired. Reconnect at ${origin}/account.`;
-          await env.STORE.put("riot:" + userId, JSON.stringify({ ...rec, sealed: undefined, expired: Date.now() }));
-        } else {
-          note = `\n\nCould not refresh from Riot${e instanceof RiotError ? ": " + e.message : "."}`;
-        }
-      }
+// Reads the user's snapshot. If it is missing or the store has rotated (or force is set) and the user
+// chose "stay logged in", refreshes it from Riot using their saved (encrypted) cookies.
+async function loadSnapshot(env, userId, { force = false } = {}) {
+  const out = { snap: await env.STORE.get("snap:" + userId, "json"), attempted: false, expired: false, failed: false, error: "" };
+  if (!force && out.snap && Date.now() <= out.snap.daily_ends_at * 1000) return out;
+  const rec = await env.STORE.get("riot:" + userId, "json");
+  if (!rec?.sealed || !env.RIOT_ENCRYPTION_KEY) return out;
+  out.attempted = true;
+  try {
+    const r = await reauth(await unseal(env.RIOT_ENCRYPTION_KEY, rec.sealed));
+    out.snap = (await fetchSnapshot(env, r.tokens)).snapshot;
+    await env.STORE.put("snap:" + userId, JSON.stringify(out.snap));
+    await env.STORE.put(
+      "riot:" + userId,
+      JSON.stringify({ ...rec, sealed: await seal(env.RIOT_ENCRYPTION_KEY, r.cookies), refreshed: Date.now() })
+    );
+  } catch (e) {
+    if (e instanceof RiotError && e.code === "session_expired") {
+      out.expired = true;
+      await env.STORE.put("riot:" + userId, JSON.stringify({ ...rec, sealed: undefined, expired: Date.now() }));
+    } else {
+      out.failed = true;
+      out.error = e instanceof RiotError ? e.message : "";
     }
   }
-  return render(snap, origin) + note;
+  return out;
+}
+
+// Returns the store text for Claude.
+async function getStoreText(env, userId, origin) {
+  const r = await loadSnapshot(env, userId);
+  let note = "";
+  if (r.expired) note = `\n\nYour saved Riot login has expired. Reconnect at ${origin}/account.`;
+  else if (r.failed) note = `\n\nCould not refresh from Riot${r.error ? ": " + r.error : "."}`;
+  return render(r.snap, origin) + note;
 }
 
 // ---------- MCP (JSON-RPC over HTTP), behind OAuth ----------
@@ -342,7 +378,7 @@ async function handlePush(request, env) {
   const clean = {
     fetched_at: snap.fetched_at,
     daily_ends_at: snap.daily_ends_at,
-    daily: snap.daily.map((d) => ({ name: d.name.slice(0, 80), vp: d.vp })),
+    daily: snap.daily.map((d) => ({ name: d.name.slice(0, 80), vp: d.vp, icon: safeIcon(d.icon) })),
     night_market: snap.night_market
       ? {
           ends_at: snap.night_market.ends_at,
@@ -350,6 +386,7 @@ async function handlePush(request, env) {
             name: String(d.name).slice(0, 80),
             vp: d.vp,
             discount: d.discount,
+            icon: safeIcon(d.icon),
           })),
         }
       : null,
@@ -415,12 +452,31 @@ async function finishAccount(request, env, url, state) {
   return new Response(null, { status: 302, headers });
 }
 
-async function dashboard(env, sess, origin, flash = "") {
-  const [user, riot, snap] = await Promise.all([
+const fmtLeft = (ms) => {
+  let m = Math.max(0, Math.floor(ms / 60000));
+  const d = Math.floor(m / 1440);
+  const h = Math.floor((m % 1440) / 60);
+  m %= 60;
+  return (d ? d + "d " : "") + (d || h ? h + "h " : "") + m + "m";
+};
+
+function skinCard(s, i) {
+  const icon = safeIcon(s.icon);
+  const off = Number(s.discount) || 0;
+  return `<article class="skin" style="--i:${i}">
+<div class="art${icon ? "" : " none"}">${off ? `<span class="off">-${off}%</span>` : ""}${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : ""}</div>
+<div class="meta"><span class="nm">${esc(s.name)}</span><span class="vp"><img src="${VP_ICON}" alt="VP" width="16" height="16">${(Number(s.vp) || 0).toLocaleString("en-US")}</span></div>
+</article>`;
+}
+
+async function dashboard(env, sess, origin, flash = "", preloaded = null) {
+  const loaded = preloaded ?? (await loadSnapshot(env, sess.userId));
+  const snap = loaded.snap;
+  const [user, riot] = await Promise.all([
     env.STORE.get("user:" + sess.userId, "json"),
     env.STORE.get("riot:" + sess.userId, "json"),
-    env.STORE.get("snap:" + sess.userId, "json"),
   ]);
+  const now = Date.now();
   const ago = (ms) => `${fmtDur(Date.now() - ms)} ago`;
   const [riotLabel, riotTone, riotText] = !riot
     ? ["Not connected", "", "Log in with Riot to let Claude read your store."]
@@ -431,6 +487,41 @@ async function dashboard(env, sess, origin, flash = "") {
         : ["Connected", "warn", `Connected once, ${ago(riot.connected)}. It will not refresh by itself.`];
   const snapStatus = snap ? `Last store snapshot: ${ago(snap.fetched_at * 1000)}.` : "No store snapshot yet.";
   const csrf = `<input type="hidden" name="csrf" value="${esc(sess.csrf)}">`;
+
+  // ----- the store itself -----
+  const warn = (t) => `<div class="notice warn" role="status">${esc(t)}</div>`;
+  let storeNote = "";
+  if (!preloaded) {
+    if (loaded.expired) storeNote = warn("Your saved Riot login has expired. Reconnect below.");
+    else if (loaded.failed) storeNote = warn("Could not refresh from Riot" + (loaded.error ? ": " + loaded.error : "."));
+  }
+  const refresh = riot?.sealed
+    ? `<form method="post" action="/account/refresh">${csrf}<button class="sec sm">Refresh</button></form>`
+    : "";
+  let store;
+  if (!snap) {
+    store = `<section class="sect"><div class="card"><div class="head"><h2>Daily store</h2></div>
+<p class="sub">No store yet. Log in with Riot below, or run the PC script, and your skins show up here.</p></div></section>`;
+  } else {
+    const stale = now > snap.daily_ends_at * 1000;
+    const nm = snap.night_market;
+    const nmLive = nm && now < nm.ends_at * 1000 && (nm.items || []).length;
+    store = `<section class="sect${stale ? " stale" : ""}">
+<div class="head"><h2>Daily store</h2><div class="tools">${
+      stale
+        ? '<span class="badge warn">Out of date</span>'
+        : `<span class="badge ok" data-end="${Number(snap.daily_ends_at)}" data-pre="Rotates in">Rotates in ${fmtLeft(snap.daily_ends_at * 1000 - now)}</span>`
+    }${refresh}</div></div>
+${storeNote}${stale ? `<p class="sub" style="margin:0 0 1rem">This snapshot is from ${ago(snap.fetched_at * 1000)}, before the store rotated. ${riot?.sealed ? "Hit Refresh." : "Log in with Riot below to update it."}</p>` : ""}
+<div class="skins">${(snap.daily || []).map((s, i) => skinCard(s, i)).join("")}</div>
+</section>
+${nmLive ? `<section class="sect">
+<div class="head"><h2>Night Market</h2><div class="tools"><span class="badge warn" data-end="${Number(nm.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(nm.ends_at * 1000 - now)}</span></div></div>
+<div class="skins nm">${nm.items.map((s, i) => skinCard(s, i)).join("")}</div>
+</section>` : ""}`;
+  }
+  if (!snap && storeNote) store = storeNote + store;
+
   const stay = env.RIOT_ENCRYPTION_KEY
     ? `<details>
 <summary>Stay logged in</summary>
@@ -453,7 +544,9 @@ ${["ssid", "clid", "csid", "tdid"]
 
   return page(
     "Your store",
-    `${flash ? `<div class="notice" role="status"${/^(Done|Disconnected)/.test(flash) ? "" : " style=\"background:var(--amber-bg)\""}>${esc(flash)}</div>` : ""}
+    `${flash ? `<div class="notice${/^(Done|Disconnected)/.test(flash) ? "" : " warn"}" role="status">${esc(flash)}</div>` : ""}
+${store}
+<div class="grid">
 <section class="card">
 <div class="head"><h2>Riot login</h2><span class="badge ${riotTone}">${esc(riotLabel)}</span></div>
 <p class="sub">${esc(riotText)}</p>
@@ -477,7 +570,8 @@ ${riot || snap ? `<section class="card">
 <div class="head"><h2>Disconnect</h2></div>
 <p class="sub">Deletes your saved Riot connection and store snapshot from this server.</p>
 <form method="post" action="/account/disconnect">${csrf}<div class="actions"><button class="danger">Delete my Riot connection and snapshot</button></div></form>
-</section>` : ""}`,
+</section>` : ""}
+</div>`,
     200,
     new Headers(),
     { lead: `Signed in as <strong>${esc(sess.login)}</strong>. ${esc(snapStatus)}` }
@@ -494,7 +588,7 @@ async function mintPcKey(env, sess, origin) {
   const cfg = JSON.stringify({ worker_url: origin, key }, null, 2);
   return page(
     "PC setup key",
-    `<section class="card">
+    `<section class="card narrow">
 <p>Save this as <code>config.json</code> next to <code>push_store.py</code> on your PC. It is shown once.</p>
 <pre><code>${esc(cfg)}</code></pre>
 <button type="button" class="sec" data-copy="${esc(cfg)}">Copy</button>
@@ -565,6 +659,17 @@ async function accountPost(request, env, url) {
       return mintPcKey(env, sess, url.origin);
     case "/account/riot":
       return connectRiot(env, sess, form, url.origin);
+    case "/account/refresh": {
+      const r = await loadSnapshot(env, sess.userId, { force: true });
+      const flash = r.expired
+        ? "Your saved Riot login has expired. Reconnect below."
+        : r.failed
+          ? "Could not refresh from Riot" + (r.error ? ": " + r.error : ".")
+          : r.attempted
+            ? "Done. Store refreshed."
+            : "Nothing to refresh. Log in with Riot below.";
+      return dashboard(env, sess, url.origin, flash, r);
+    }
     case "/account/disconnect":
       await env.STORE.delete("riot:" + sess.userId);
       await env.STORE.delete("snap:" + sess.userId);
@@ -582,7 +687,7 @@ function consentPage(d, handle, headers) {
     : "This app registered itself, so its name is not verified.";
   return page(
     `Allow ${d.clientName} to read your Valorant store?`,
-    `<section class="card">
+    `<section class="card narrow">
 <p>${origin} Access will be sent to <strong>${esc(d.redirectHost)}</strong>.</p>
 ${d.redirectIsLoopback ? `<p class="notice" style="background:var(--amber-bg)"><strong>This sends access to an app on your computer.</strong> Continue only if you just started signing in from it.</p>` : ""}
 <p class="sub">You will sign in with GitHub next. Only your GitHub username and id are used.</p>
@@ -653,15 +758,18 @@ async function callback(request, env) {
 const home = (origin) =>
   page(
     "Valorant store connector",
-    `<section class="card">
-<div class="head"><h2>Set up in two steps</h2></div>
-<ol class="steps">
-<li>In Claude, add a custom connector with this URL and sign in with GitHub.
-<div class="copy"><code>${esc(origin)}/mcp</code><button type="button" data-copy="${esc(origin)}/mcp">Copy</button></div></li>
-<li>Connect your Riot account, with a Riot login or the PC script.</li>
-</ol>
+    `<div class="grid">
+<section class="card">
+<div class="head"><h2>1. Add the connector</h2></div>
+<p class="sub">In Claude, add a custom connector with this URL and sign in with GitHub.</p>
+<div class="copy"><code>${esc(origin)}/mcp</code><button type="button" data-copy="${esc(origin)}/mcp">Copy</button></div>
+</section>
+<section class="card">
+<div class="head"><h2>2. Connect Riot</h2></div>
+<p class="sub">Log in with Riot, or run the PC script, so Claude and this site can read your store.</p>
 <div class="actions"><a class="btn" href="/account">Connect Riot account</a></div>
-</section>`,
+</section>
+</div>`,
     200,
     new Headers(),
     { heading: "Your Valorant store, in Claude.", lead: "Ask Claude what is in your daily store or Night Market, from any device." }
