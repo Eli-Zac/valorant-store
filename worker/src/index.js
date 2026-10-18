@@ -780,10 +780,11 @@ function addonsView(env, sess, origin) {
     "addons",
     "Add-ons",
     `<div class="grid">
-<section class="card star">
+<section class="card">
 <div class="head"><h2>Discord</h2><span class="badge bad">/store command</span></div>
 <p>Add the app to your Discord profile and type <em>/store</em> in any server, DM or group chat. Pick which linked Riot account to show. The reply is posted in the chat.</p>
 <div class="actions"><a class="btn orn" href="${esc(install)}" target="_blank" rel="noopener noreferrer">Add to Discord</a></div>
+<p class="sub" style="margin-top:1.2rem">Link your Riot accounts on the Accounts tab first. Then in Discord, type <code>/store</code> and choose an account from the list, or leave it empty to see all of them.</p>
 </section>
 <section class="card">
 <div class="head"><h2>Claude</h2><span class="badge bad">MCP connector</span></div>
@@ -793,15 +794,13 @@ function addonsView(env, sess, origin) {
 <li>In Claude, add a custom connector with that URL.</li>
 <li>Click Connect, sign in with Discord, and approve.</li>
 </ol>
-</section>
-<section class="card">
-<div class="head"><h2>Then just ask</h2></div>
+<p class="sub" style="margin-bottom:.6rem">Then just ask:</p>
 <ul class="asks">
 <li>What's in my Valorant store?</li>
 <li>Is the Night Market live?</li>
 <li>How long until my store resets?</li>
 </ul>
-<p class="sub">Works in Claude on web, desktop and mobile with the same account. You need to link your Riot account first, on the Accounts tab.</p>
+<p class="sub">Works in Claude on web, desktop and mobile with the same account.</p>
 </section>
 </div>`,
     { lead: "Take your store with you. Use it from any Discord chat, or ask Claude in plain language, on any device." }
