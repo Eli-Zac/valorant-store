@@ -46,15 +46,15 @@ jobs:
           test -n "$ID" || { echo "Could not find or create the KV namespace"; exit 1; }
           sed -i "s/REPLACE_WITH_KV_NAMESPACE_ID/$ID/g" wrangler.toml
 
-      # Optional: set a repository variable ALLOWED_GITHUB_USERS (comma-separated GitHub
-      # usernames) to restrict who can sign in. Leave it unset to allow any GitHub user.
+      # Optional: set a repository variable ALLOWED_DISCORD_USERS (comma-separated Discord
+      # usernames or ids) to restrict who can sign in. Leave it unset to allow any Discord user.
       - name: Apply optional allow list
-        if: ${{ vars.ALLOWED_GITHUB_USERS != '' }}
+        if: ${{ vars.ALLOWED_DISCORD_USERS != '' }}
         env:
-          ALLOWED: ${{ vars.ALLOWED_GITHUB_USERS }}
+          ALLOWED: ${{ vars.ALLOWED_DISCORD_USERS }}
         run: |
           case "$ALLOWED" in
-            *[!A-Za-z0-9,-]*) echo "ALLOWED_GITHUB_USERS may only contain letters, digits, hyphens and commas"; exit 1 ;;
+            *[!A-Za-z0-9_.,]*) echo "ALLOWED_DISCORD_USERS may only contain letters, digits, underscores, dots and commas"; exit 1 ;;
           esac
           printf '\n[vars]\nALLOWED_USERS = "%s"\n' "$ALLOWED" >> worker/wrangler.toml
 
@@ -65,11 +65,11 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
           secrets: |
-            GH_CLIENT_ID
-            GH_CLIENT_SECRET
+            DISCORD_CLIENT_ID
+            DISCORD_CLIENT_SECRET
         env:
-          GH_CLIENT_ID: ${{ secrets.GH_OAUTH_CLIENT_ID }}
-          GH_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
 
       # Optional: enables the "stay logged in" option for Riot login. Add a repository secret
       # RIOT_ENCRYPTION_KEY (a long random string, 32+ characters) and keep it stable.

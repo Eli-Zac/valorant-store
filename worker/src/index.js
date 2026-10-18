@@ -1,10 +1,10 @@
-// Valorant store remote MCP, multi-user, with "Sign in with GitHub".
+// Valorant store: a web app plus a remote MCP server, multi-user, with "Sign in with Discord".
 //
-//   Claude  --OAuth (GitHub identity)-->  this Worker  <--push (personal key)--  your PC
+//   Claude  --OAuth (Discord identity)-->  this Worker  <--push (personal key)--  your PC
 //
 // - /mcp        the MCP endpoint (needs an OAuth access token, issued by this Worker)
-// - /authorize  consent page, then GitHub sign-in (handled via @cloudflare/workers-oauth-provider)
-// - /account    sign in with GitHub to get the personal key the PC script pushes with
+// - /authorize  consent page, then Discord sign-in (handled via @cloudflare/workers-oauth-provider)
+// - /account    sign in with Discord to use the web app and get the personal key the PC script pushes with
 // - /push       the PC script posts the store snapshot here (Bearer personal key)
 
 import OAuthProvider, {
@@ -19,9 +19,6 @@ const enc = new TextEncoder();
 const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
 const sha256 = async (s) => hex(await crypto.subtle.digest("SHA-256", enc.encode(s)));
 const randHex = (n) => hex(crypto.getRandomValues(new Uint8Array(n)));
-const b64url = (buf) =>
-  btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-const s256 = async (v) => b64url(await crypto.subtle.digest("SHA-256", enc.encode(v)));
 
 const ICON_RE = /^https:\/\/media\.valorant-api\.com\/[\w\/.-]{1,200}$/;
 const safeIcon = (u) => (typeof u === "string" && ICON_RE.test(u) ? u : null);
@@ -219,54 +216,57 @@ ${body}
   return new Response(html, { status, headers });
 }
 
-// ---------- GitHub ----------
+// ---------- Discord ----------
 
-const UA = "valorant-store";
+// Discord asks API clients to identify themselves as DiscordBot (url, version).
+const DISCORD_UA = "DiscordBot (https://github.com/Eli-Zac/valorant-store, 1.0)";
 
-function githubAuthorizeUrl(env, origin, state, challenge) {
-  const u = new URL("https://github.com/login/oauth/authorize");
+// Discord's docs do not list PKCE, so it is not used. The random state (checked by the OAuth provider
+// for Claude, and by a cookie plus a short-lived KV entry for the web app) protects the redirect.
+function discordAuthorizeUrl(env, origin, state) {
+  const u = new URL("https://discord.com/oauth2/authorize");
   u.search = new URLSearchParams({
-    client_id: env.GH_CLIENT_ID,
+    client_id: env.DISCORD_CLIENT_ID,
     redirect_uri: `${origin}/callback`,
+    response_type: "code",
+    scope: "identify",
     state,
-    code_challenge: challenge,
-    code_challenge_method: "S256",
   }).toString();
   return u.toString();
 }
 
-// Exchanges the code and reads the public profile. No GitHub scopes are requested and the
-// GitHub token is discarded straight away, only the numeric id and login are kept.
-async function githubUser(env, origin, code, verifier) {
-  const r = await fetch("https://github.com/login/oauth/access_token", {
+// Exchanges the code and reads the public profile. Only the "identify" scope is requested and the
+// Discord token is discarded straight away, only the id and name are kept.
+async function discordUser(env, origin, code) {
+  const r = await fetch("https://discord.com/api/oauth2/token", {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json", "User-Agent": UA },
-    body: JSON.stringify({
-      client_id: env.GH_CLIENT_ID,
-      client_secret: env.GH_CLIENT_SECRET,
+    headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded", "User-Agent": DISCORD_UA },
+    body: new URLSearchParams({
+      client_id: env.DISCORD_CLIENT_ID,
+      client_secret: env.DISCORD_CLIENT_SECRET,
+      grant_type: "authorization_code",
       code,
       redirect_uri: `${origin}/callback`,
-      code_verifier: verifier,
     }),
   });
   const t = await r.json();
-  if (!t.access_token) throw new Error(t.error_description || "GitHub sign-in failed");
-  const u = await fetch("https://api.github.com/user", {
-    headers: { Authorization: `Bearer ${t.access_token}`, Accept: "application/vnd.github+json", "User-Agent": UA },
+  if (!t.access_token) throw new Error(t.error_description || "Discord sign-in failed");
+  const u = await fetch("https://discord.com/api/users/@me", {
+    headers: { Authorization: `Bearer ${t.access_token}`, Accept: "application/json", "User-Agent": DISCORD_UA },
   });
   const user = await u.json();
-  if (!user.id || !user.login) throw new Error("Could not read GitHub profile");
-  return { id: String(user.id), login: String(user.login) };
+  if (!user.id || !user.username) throw new Error("Could not read Discord profile");
+  return { id: String(user.id), username: String(user.username), login: String(user.global_name || user.username) };
 }
 
-// ALLOWED_USERS (optional, comma-separated GitHub logins). Empty means anyone can sign in.
-function isAllowed(env, login) {
+// ALLOWED_USERS (optional, comma-separated Discord usernames or ids). Empty means anyone can sign in.
+function isAllowed(env, user) {
   const list = (env.ALLOWED_USERS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-  return list.length === 0 || list.includes(login.toLowerCase());
+  return list.length === 0 || list.includes(user.username.toLowerCase()) || list.includes(user.id);
 }
 
 const notAllowed = (login, headers) =>
-  page("Not allowed", `<p>The GitHub account <strong>${esc(login)}</strong> is not on this server's allow list.</p>`, 403, headers);
+  page("Not allowed", `<p>The Discord account <strong>${esc(login)}</strong> is not on this server's allow list.</p>`, 403, headers);
 
 // ---------- store rendering ----------
 
@@ -442,7 +442,7 @@ async function handlePush(request, env) {
   return new Response("ok");
 }
 
-// ---------- /account: GitHub sign-in, then a small dashboard ----------
+// ---------- /account: Discord sign-in, then the web app ----------
 
 const ACCT_COOKIE = "__Host-vs-acct";
 const SESS_COOKIE = "__Host-vs-sess";
@@ -464,10 +464,9 @@ async function getSession(request, env) {
 async function startAccount(request, env) {
   const origin = new URL(request.url).origin;
   const id = randHex(16);
-  const verifier = randHex(32);
-  await env.STORE.put("acct:" + id, verifier, { expirationTtl: 600 });
+  await env.STORE.put("acct:" + id, "1", { expirationTtl: 600 });
   const headers = new Headers({
-    Location: githubAuthorizeUrl(env, origin, "acct_" + id, await s256(verifier)),
+    Location: discordAuthorizeUrl(env, origin, "acct_" + id),
     "Set-Cookie": setCookie(ACCT_COOKIE, id, 600),
   });
   return new Response(null, { status: 302, headers });
@@ -476,16 +475,16 @@ async function startAccount(request, env) {
 async function finishAccount(request, env, url, state) {
   const id = state.slice(5);
   const clear = new Headers({ "Set-Cookie": setCookie(ACCT_COOKIE, "", 0) });
-  const verifier = await env.STORE.get("acct:" + id);
+  const pending = await env.STORE.get("acct:" + id);
   await env.STORE.delete("acct:" + id);
-  if (!verifier || cookieOf(request, ACCT_COOKIE) !== id) {
+  if (!pending || cookieOf(request, ACCT_COOKIE) !== id) {
     return page("Sign-in expired", `<p>Start again at <a href="/account">/account</a>.</p>`, 400, clear);
   }
   if (url.searchParams.get("error") || !url.searchParams.get("code")) {
     return page("Sign-in cancelled", `<p>Start again at <a href="/account">/account</a>.</p>`, 400, clear);
   }
-  const user = await githubUser(env, url.origin, url.searchParams.get("code"), verifier);
-  if (!isAllowed(env, user.login)) return notAllowed(user.login, clear);
+  const user = await discordUser(env, url.origin, url.searchParams.get("code"));
+  if (!isAllowed(env, user)) return notAllowed(user.login, clear);
 
   const sid = randHex(24);
   await env.STORE.put(
@@ -678,7 +677,7 @@ function claudeView(sess, origin) {
 <li>Copy the connector URL.
 <div class="copy"><code>${esc(url)}</code><button type="button" data-copy="${esc(url)}">Copy</button></div></li>
 <li>In Claude, add a custom connector with that URL.</li>
-<li>Click Connect, sign in with GitHub, and approve.</li>
+<li>Click Connect, sign in with Discord, and approve.</li>
 </ol>
 </section>
 <section class="card">
@@ -801,7 +800,7 @@ async function accountPost(request, env, url) {
   }
 }
 
-// ---------- OAuth for Claude: consent, then GitHub ----------
+// ---------- OAuth for Claude: consent, then Discord ----------
 
 function consentPage(d, handle, headers) {
   const origin = d.clientDomain
@@ -812,7 +811,7 @@ function consentPage(d, handle, headers) {
     `<section class="card narrow">
 <p>${origin} Access will be sent to <strong>${esc(d.redirectHost)}</strong>.</p>
 ${d.redirectIsLoopback ? `<p class="notice" style="background:var(--amber-bg)"><strong>This sends access to an app on your computer.</strong> Continue only if you just started signing in from it.</p>` : ""}
-<p class="sub">You will sign in with GitHub next. Only your GitHub username and id are used.</p>
+<p class="sub">You will sign in with Discord next. Only your Discord username and id are used.</p>
 <form method="post">
 <input type="hidden" name="handle" value="${esc(handle)}">
 <div class="actions split"><button name="decision" value="approve">Allow</button><button name="decision" value="deny">Deny</button></div>
@@ -841,12 +840,11 @@ async function authorizePost(request, env) {
     return new Response(null, { status: 302, headers: denied.headers });
   }
   const approved = await oauth.approveConsent(request, handle);
-  const verifier = randHex(32);
   const { state, headers } = await oauth.beginUpstream(approved.request, {
-    data: { verifier },
+    data: {},
     headers: approved.headers,
   });
-  headers.set("Location", githubAuthorizeUrl(env, origin, state, await s256(verifier)));
+  headers.set("Location", discordAuthorizeUrl(env, origin, state));
   return new Response(null, { status: 302, headers });
 }
 
@@ -856,13 +854,13 @@ async function callback(request, env) {
   if (state.startsWith("acct_")) return finishAccount(request, env, url, state);
 
   const oauth = env.OAUTH_PROVIDER;
-  const { request: original, data, headers } = await oauth.finishUpstream(request);
+  const { request: original, headers } = await oauth.finishUpstream(request);
   if (url.searchParams.get("error") || !url.searchParams.get("code")) {
     headers.set("Location", authorizationErrorRedirect(original, "access_denied"));
     return new Response(null, { status: 302, headers });
   }
-  const user = await githubUser(env, url.origin, url.searchParams.get("code"), data.verifier);
-  if (!isAllowed(env, user.login)) return notAllowed(user.login, headers);
+  const user = await discordUser(env, url.origin, url.searchParams.get("code"));
+  if (!isAllowed(env, user)) return notAllowed(user.login, headers);
 
   const { redirectTo } = await oauth.completeAuthorization({
     request: original,
@@ -885,7 +883,7 @@ const ghostCard = (i) => `<article class="skin ghost" style="--i:${i}">
 const landing = (origin) =>
   page(
     "Valorant Store",
-    `<div class="actions cta"><a class="btn" href="/account">Sign in with GitHub</a><a class="btn sec" href="#features">See what you get</a></div>
+    `<div class="actions cta"><a class="btn" href="/account">Sign in with Discord</a><a class="btn sec" href="#features">See what you get</a></div>
 
 <section class="sect" aria-label="Preview">
 <div class="skins">${[0, 1, 2, 3].map(ghostCard).join("")}</div>
@@ -918,7 +916,7 @@ const landing = (origin) =>
 <section class="sect">
 <div class="head"><h2>How it works</h2></div>
 <div class="grid">
-<section class="card"><span class="stepno">01</span><h2>Sign in</h2><p class="sub">Use your GitHub account. Only your username and id are kept.</p></section>
+<section class="card"><span class="stepno">01</span><h2>Sign in</h2><p class="sub">Use your Discord account. Only your username and id are kept.</p></section>
 <section class="card"><span class="stepno">02</span><h2>Link Riot</h2><p class="sub">Log in on Riot's own page, or run the PC script. This site never sees your password.</p></section>
 <section class="card"><span class="stepno">03</span><h2>Check your store</h2><p class="sub">Open it here on the web, or ask Claude through the MCP connector.</p></section>
 </div>
