@@ -177,8 +177,7 @@ footer p{margin:0;max-width:34rem}
 .sm{padding:9px 18px;font:500 14px/20px var(--font);letter-spacing:.02em}
 .notice.warn{background:var(--amber-bg);border-left-color:var(--amber)}
 .skins{display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr))}
-.skin{--cut:12px;position:relative;display:flex;flex-direction:column;background:#101820;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));transition:transform .35s var(--ease);animation:rise .6s var(--ease) both;animation-delay:calc(var(--i,0)*70ms)}
-.skin:hover{transform:translateY(-4px)}
+.skin{--cut:12px;position:relative;display:flex;flex-direction:column;background:#101820;clip-path:polygon(0 0,calc(100% - var(--cut)) 0,100% var(--cut),100% 100%,var(--cut) 100%,0 calc(100% - var(--cut)));animation:rise .6s var(--ease) both;animation-delay:calc(var(--i,0)*70ms)}
 .art{position:relative;aspect-ratio:16/10;display:grid;place-items:center;padding:1rem;overflow:hidden;
 background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 70%),linear-gradient(180deg,#39414a 0%,#3a3532 55%,#7a4a26 100%)}
 .art img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 8px 10px rgba(0,0,0,.5));transition:transform .5s var(--ease)}
