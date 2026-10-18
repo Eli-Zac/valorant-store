@@ -38,7 +38,7 @@ To the fullest extent the law allows, the operator is not liable for any indirec
 
 ## Ending your use
 
-You can stop at any time by removing your linked accounts on the Connect tab and asking us to delete your remaining records. We may suspend or remove access for anyone who breaks these terms or puts the service at risk, and we may change or end the service at any time.
+You can stop at any time by removing your linked accounts on the Accounts tab and asking us to delete your remaining records. We may suspend or remove access for anyone who breaks these terms or puts the service at risk, and we may change or end the service at any time.
 
 ## Changes to these terms
 

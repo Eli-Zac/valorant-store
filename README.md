@@ -33,7 +33,7 @@ If you use a custom domain, add it to the Worker in the Cloudflare dashboard and
 
 ## 2. Connect your Riot account (each person)
 
-Open your Worker URL, click **Sign in with Discord**, then go to the **Connect** tab. You can link up to five Riot accounts to one Discord login; the **Store** tab has a switcher, and Claude sees all of them (or one, if you name it).
+Open your Worker URL, click **Sign in with Discord**, then go to the **Accounts** tab. You can link up to five Riot accounts to one Discord login; the **Store** tab has a switcher, and Claude sees all of them (or one, if you name it).
 
 1. Click **Open Riot login** to log in on Riot's own page. This site never sees your password.
 2. You land on a page that looks empty or broken. Copy the full address from the address bar and paste it into the box.
@@ -47,13 +47,13 @@ To add another account, sign out of Riot on that page first (or use a private wi
 
 ## Discord `/store` command (once, whoever hosts it)
 
-The deploy registers a single `/store` command with an optional `account` parameter (autocomplete lists the Riot accounts you linked). It is a user-installable app, so anyone can add it to their own profile and use it in any server, DM or group chat. Replies are only visible to the person who ran it.
+The deploy registers a single `/store` command with an optional `account` parameter (autocomplete lists the Riot accounts you linked). It is a user-installable app, so anyone can add it to their own profile and use it in any server, DM or group chat. Replies are posted in the chat, so everyone there can see them.
 
 In the Discord developer portal, for your application:
 1. **General Information** > copy the **Public Key** into the `DISCORD_PUBLIC_KEY` secret, and set **Interactions Endpoint URL** to `<your Worker URL>/interactions` (Discord checks it responds, so deploy first).
 2. **Installation** > enable **User Install**, add the `applications.commands` scope to its install link, and make sure the install link is on.
 
-Each person then opens the **Claude** tab on the site and clicks **Add to Discord** (or uses your install link), links their Riot accounts on the **Connect** tab, and runs `/store`. Commands can take up to an hour to show up the first time.
+Each person then opens the **Add-ons** tab on the site and clicks **Add to Discord** (or uses your install link), links their Riot accounts on the **Accounts** tab, and runs `/store`. Commands can take up to an hour to show up the first time.
 
 ## 3. Check your store
 
@@ -61,7 +61,7 @@ The **Store** tab is the main screen: daily skins, Night Market when it is live,
 
 ## 4. Ask Claude (MCP, optional)
 
-The **Claude** tab shows your connector URL. Add a custom connector in Claude with `https://<your Worker URL>/mcp`, click Connect, approve, and sign in with Discord. It then works on every device signed in to that Claude account.
+The **Add-ons** tab shows your connector URL. Add a custom connector in Claude with `https://<your Worker URL>/mcp`, click Connect, approve, and sign in with Discord. It then works on every device signed in to that Claude account.
 
 ## Notes
 
