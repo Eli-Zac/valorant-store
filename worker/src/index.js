@@ -128,7 +128,9 @@ nav .btn:hover{text-decoration:none}
 .stat .v.clock{font-size:clamp(2.4rem,6vw,3.6rem)}
 .stat .v.bad{color:var(--amber)}
 .stat .vpi{width:1.4rem;height:1.4rem}
-.strip .tools{margin-left:auto}
+.strip .tools{margin-left:auto;gap:1rem}
+.stat.sm .v{font-size:1.6rem}.stat.sm .vpi{width:1.15rem;height:1.15rem}
+.upd{font:600 .75rem/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--sub)}
 .empty{max-width:40rem}
 .cta{margin:-1.25rem 0 1.5rem}
 .trust{list-style:none;margin:0 0 3rem;padding:0;display:flex;flex-wrap:wrap;gap:.7rem 2.2rem;color:var(--sub);font-size:15px;line-height:1.45}
@@ -824,14 +826,12 @@ ${friend ? "" : '<div class="actions"><a class="btn" href="/accounts">Open Accou
         ? '<span class="v bad">Out of date</span>'
         : `<span class="v clock" data-clock="${Number(snap.daily_ends_at)}">${fmtClock(snap.daily_ends_at * 1000 - now)}</span>`
     }</div>
-<div class="stat"><span class="k">Daily total</span><span class="v"><img class="vpi" src="${VP_ICON}" alt="VP" width="22" height="22">${total.toLocaleString("en-US")}</span></div>
-${wal ? `<div class="stat"><span class="k">Wallet</span><span class="v wal"><span><img class="vpi" src="${VP_ICON}" alt="VP" width="22" height="22">${Number(wal.vp).toLocaleString("en-US")}</span><span><img class="vpi" src="${KC_ICON}" alt="KC" width="22" height="22">${Number(wal.kc).toLocaleString("en-US")}</span></span></div>` : ""}
-<div class="stat"><span class="k">Updated</span><span class="v">${esc(ago(snap.fetched_at * 1000))}</span></div>
-<div class="tools">${tool}</div>
+${wal ? `<div class="stat sm"><span class="k">Wallet</span><span class="v wal"><span><img class="vpi" src="${VP_ICON}" alt="VP" width="22" height="22">${Number(wal.vp).toLocaleString("en-US")}</span><span><img class="vpi" src="${KC_ICON}" alt="KC" width="22" height="22">${Number(wal.kc).toLocaleString("en-US")}</span></span></div>` : ""}
+<div class="tools"><span class="upd">${now - snap.fetched_at * 1000 < 60000 ? "Updated just now" : "Updated " + esc(ago(snap.fetched_at * 1000))}</span>${tool}</div>
 </div>
 ${stale ? `<p class="sub" style="margin:0 0 1rem">This snapshot is from ${esc(ago(snap.fetched_at * 1000))}, before the store rotated. ${friend ? `${esc(cur.ownerName || "The owner")} needs to update it.` : riot?.sealed ? "Hit Refresh." : "Update it from the Accounts tab."}</p>` : ""}
 <section class="sect${stale ? " stale" : ""}">
-<div class="head"><h2>Daily store</h2></div>
+<div class="head"><h2>Daily store</h2><div class="tools"><span class="badge">${total.toLocaleString("en-US")} VP total</span></div></div>
 <div class="skins">${(snap.daily || []).map((s, i) => skinCard(s, i)).join("")}</div>
 </section>
 ${
@@ -853,7 +853,7 @@ ${
 ${
   acLive
     ? `<section class="sect">
-<div class="head"><h2>Accessory store</h2><div class="tools"><span class="badge"><img class="kci" src="${KC_ICON}" alt="" width="14" height="14">${kcTotal.toLocaleString("en-US")} total</span><span class="badge" data-end="${Number(ac.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(ac.ends_at * 1000 - now)}</span></div></div>
+<div class="head"><h2>Accessory store</h2><div class="tools"><span class="badge">${kcTotal.toLocaleString("en-US")} KC total</span><span class="badge" data-end="${Number(ac.ends_at)}" data-pre="Ends in">Ends in ${fmtLeft(ac.ends_at * 1000 - now)}</span></div></div>
 <div class="skins">${ac.items.map((a, i) => accessoryCard(a, i)).join("")}</div>
 </section>`
     : ""
