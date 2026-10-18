@@ -271,7 +271,7 @@ function navHtml(n) {
   const tabs = TABS.map(
     ([k, label, href]) => `<a class="tab${n.tab === k ? " on" : ""}" href="${href}"${n.tab === k ? ' aria-current="page"' : ""}>${label}</a>`
   ).join("");
-  return `<nav><div>${brand}<div class="tabs">${tabs}</div><div class="who">${/^[\w]{1,64}$/.test(n.avatar || "") && /^\d{1,25}$/.test(String(n.userId || "")) ? `<img class="pfp" src="https://cdn.discordapp.com/avatars/${n.userId}/${n.avatar}.png?size=64" alt="" width="28" height="28" referrerpolicy="no-referrer">` : ""}<span>${esc(n.login)}</span><form method="post" action="/account/signout"><input type="hidden" name="csrf" value="${esc(n.csrf)}"><button class="sec sm">Sign out</button></form></div></div></nav>`;
+  return `<nav><div>${brand}<div class="tabs">${tabs}</div><div class="who">${/^\d{1,25}$/.test(String(n.userId || "")) ? `<img class="pfp" src="${/^[\w]{1,64}$/.test(n.avatar || "") ? `https://cdn.discordapp.com/avatars/${n.userId}/${n.avatar}.png?size=64` : `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(n.userId) >> 22n) % 6n)}.png`}" alt="" width="28" height="28" referrerpolicy="no-referrer">` : ""}<span>${esc(n.login)}</span><form method="post" action="/account/signout"><input type="hidden" name="csrf" value="${esc(n.csrf)}"><button class="sec sm">Sign out</button></form></div></div></nav>`;
 }
 
 // opts: { lead } is the subtitle under the heading (trusted HTML), { heading } overrides the h1 text,
