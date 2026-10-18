@@ -4,7 +4,7 @@
 //
 // - /mcp        the MCP endpoint (needs an OAuth access token, issued by this Worker)
 // - /authorize  consent page, then Discord sign-in (handled via @cloudflare/workers-oauth-provider)
-// - /store      the web app: sign in with Discord, see your store (/account/* has Accounts and Add-ons)
+// - /store, /accounts, /addons   the web app: sign in with Discord, see your store, link Riot accounts, add-ons
 
 import OAuthProvider, {
   AuthorizationError,
@@ -209,8 +209,8 @@ t();setInterval(t,1e3)})();`;
 
 const TABS = [
   ["store", "Store", "/store"],
-  ["accounts", "Accounts", "/account/accounts"],
-  ["addons", "Add-ons", "/account/addons"],
+  ["accounts", "Accounts", "/accounts"],
+  ["addons", "Add-ons", "/addons"],
 ];
 
 function navHtml(n) {
@@ -424,7 +424,7 @@ async function getStoreText(env, userId, origin, filter = "") {
     picked.map(async ({ a }) => {
       const r = await loadSnapshot(env, userId, a.puuid);
       let note = "";
-      if (r.expired) note = `\n\nThis account's saved Riot login has expired. Reconnect at ${origin}/account/accounts.`;
+      if (r.expired) note = `\n\nThis account's saved Riot login has expired. Reconnect at ${origin}/accounts.`;
       else if (r.failed) note = `\n\nCould not refresh from Riot${r.error ? ": " + r.error : "."}`;
       return render(r.snap, origin) + note;
     })
@@ -501,7 +501,7 @@ const mcpHandler = {
   },
 };
 
-// ---------- /store and /account/*: Discord sign-in, then the web app ----------
+// ---------- /store, /accounts, /addons: Discord sign-in, then the web app ----------
 
 const ACCT_COOKIE = "__Host-vs-acct";
 const SESS_COOKIE = "__Host-vs-sess";
@@ -604,7 +604,7 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
       `${flashBox(flash)}<section class="card empty">
 <div class="head"><h2>No store yet</h2></div>
 <p class="sub">Link your Riot account once and your daily skins and Night Market show up here. You can link up to ${MAX_ACCOUNTS} accounts.</p>
-<div class="actions"><a class="btn orn" href="/account/accounts">Connect Riot account</a></div>
+<div class="actions"><a class="btn orn" href="/accounts">Connect Riot account</a></div>
 </section>`,
       { lead }
     );
@@ -629,14 +629,14 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
       (a, i) =>
         `<a class="chip${i === idx ? " on" : ""}" href="/store?acc=${esc(a.puuid)}"${i === idx ? ' aria-current="true"' : ""}>${esc(acctName(a, i))}</a>`
     )
-    .join("")}${accs.length < MAX_ACCOUNTS ? '<a class="chip add" href="/account/accounts">+ Add account</a>' : ""}</div>`;
+    .join("")}${accs.length < MAX_ACCOUNTS ? '<a class="chip add" href="/accounts">+ Add account</a>' : ""}</div>`;
 
   let body;
   if (!snap) {
     body = `${note}<section class="card empty">
 <div class="head"><h2>No store yet</h2></div>
 <p class="sub">This account has no store snapshot yet. Add it again on the Accounts tab.</p>
-<div class="actions"><a class="btn" href="/account/accounts">Open Accounts</a></div>
+<div class="actions"><a class="btn" href="/accounts">Open Accounts</a></div>
 </section>`;
   } else {
     const stale = now > snap.daily_ends_at * 1000;
@@ -645,7 +645,7 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
     const total = (snap.daily || []).reduce((n, s) => n + (Number(s.vp) || 0), 0);
     const tool = riot?.sealed
       ? `<form method="post" action="/account/refresh">${csrf}<button class="sec sm">Refresh</button></form>`
-      : `<a class="btn sec sm" href="/account/accounts">Update store</a>`;
+      : `<a class="btn sec sm" href="/accounts">Update store</a>`;
     body = `${note}<div class="strip">
 <div class="stat"><span class="k">Resets in</span>${
       stale
@@ -780,10 +780,11 @@ function addonsView(env, sess, origin) {
     "addons",
     "Add-ons",
     `<div class="grid">
-<section class="card star">
+<section class="card">
 <div class="head"><h2>Discord</h2><span class="badge bad">/store command</span></div>
 <p>Add the app to your Discord profile and type <em>/store</em> in any server, DM or group chat. Pick which linked Riot account to show. The reply is posted in the chat.</p>
 <div class="actions"><a class="btn orn" href="${esc(install)}" target="_blank" rel="noopener noreferrer">Add to Discord</a></div>
+<p class="sub" style="margin-top:1.2rem">Link your Riot accounts on the Accounts tab first. Then in Discord, type <code>/store</code> and choose an account from the list, or leave it empty to see all of them.</p>
 </section>
 <section class="card">
 <div class="head"><h2>Claude</h2><span class="badge bad">MCP connector</span></div>
@@ -793,15 +794,13 @@ function addonsView(env, sess, origin) {
 <li>In Claude, add a custom connector with that URL.</li>
 <li>Click Connect, sign in with Discord, and approve.</li>
 </ol>
-</section>
-<section class="card">
-<div class="head"><h2>Then just ask</h2></div>
+<p class="sub" style="margin-bottom:.6rem">Then just ask:</p>
 <ul class="asks">
 <li>What's in my Valorant store?</li>
 <li>Is the Night Market live?</li>
 <li>How long until my store resets?</li>
 </ul>
-<p class="sub">Works in Claude on web, desktop and mobile with the same account. You need to link your Riot account first, on the Accounts tab.</p>
+<p class="sub">Works in Claude on web, desktop and mobile with the same account.</p>
 </section>
 </div>`,
     { lead: "Take your store with you. Use it from any Discord chat, or ask Claude in plain language, on any device." }
@@ -927,7 +926,7 @@ function storeEmbed(name, r, origin) {
   const embed = { title: name, color: 0xff4655, fields: [] };
   const snap = r.snap;
   if (!snap) {
-    embed.description = `No store data yet. Reconnect this account at ${origin}/account/accounts.`;
+    embed.description = `No store data yet. Reconnect this account at ${origin}/accounts.`;
     return embed;
   }
   const now = Date.now();
@@ -954,7 +953,7 @@ function storeEmbed(name, r, origin) {
 async function storeCommand(env, interaction, userId, origin) {
   const opt = (interaction.data.options || []).find((o) => o.name === "account");
   const accs = await getAccounts(env, userId);
-  if (!accs.length) return { content: `You have not linked a Riot account yet. Do it at ${origin}/account/accounts, then run /store again.` };
+  if (!accs.length) return { content: `You have not linked a Riot account yet. Do it at ${origin}/accounts, then run /store again.` };
   const picked = matchAccounts(accs, opt?.value);
   if (!picked.length) {
     return { content: `No linked Riot account matches "${opt.value}". Linked accounts: ${accs.map(acctName).join(", ")}.` };
@@ -1249,7 +1248,7 @@ const landing = (origin) =>
 <div class="head"><h2>Ask Claude (MCP)</h2><span class="badge bad">Key feature</span></div>
 <p>This site is also a Claude connector, built on the Model Context Protocol (MCP). Add it once and ask Claude <em>"What's in my Valorant store?"</em> from the web, desktop or your phone.</p>
 <div class="copy"><code>${esc(origin)}/mcp</code><button type="button" data-copy="${esc(origin)}/mcp">Copy</button></div>
-<div class="actions"><a class="btn sec sm" href="/account/addons">Setup guide</a></div>
+<div class="actions"><a class="btn sec sm" href="/addons">Setup guide</a></div>
 </section>
 </div>
 </section>
@@ -1294,19 +1293,16 @@ const defaultHandler = {
         if (request.method === "POST") return await authorizePost(request, env);
       }
       if (url.pathname === "/callback" && request.method === "GET") return await callback(request, env);
-      if (url.pathname === "/account" && request.method === "GET") {
-        return Response.redirect(url.origin + "/store" + url.search, 302);
-      }
-      if (["/store", "/account/accounts", "/account/addons"].includes(url.pathname) && request.method === "GET") {
+      // Old tab addresses (still linked from earlier pages and Discord replies).
+      const MOVED = { "/account": "/store", "/account/accounts": "/accounts", "/account/addons": "/addons", "/account/connect": "/accounts", "/account/claude": "/addons" };
+      if (request.method === "GET" && MOVED[url.pathname]) return Response.redirect(url.origin + MOVED[url.pathname] + url.search, 302);
+      if (["/store", "/accounts", "/addons"].includes(url.pathname) && request.method === "GET") {
         const sess = await getSession(request, env);
         if (!sess) return await startAccount(request, env);
-        if (url.pathname === "/account/accounts") return await accountsView(env, sess, url.origin);
-        if (url.pathname === "/account/addons") return addonsView(env, sess, url.origin);
+        if (url.pathname === "/accounts") return await accountsView(env, sess, url.origin);
+        if (url.pathname === "/addons") return addonsView(env, sess, url.origin);
         return await storeView(env, sess, url.origin, "", null, url.searchParams.get("acc") || "");
       }
-      // Old tab addresses (still linked from earlier Discord replies).
-      if (request.method === "GET" && url.pathname === "/account/connect") return Response.redirect(url.origin + "/account/accounts", 302);
-      if (request.method === "GET" && url.pathname === "/account/claude") return Response.redirect(url.origin + "/account/addons", 302);
       if (url.pathname.startsWith("/account/") && request.method === "POST") return await accountPost(request, env, url);
       if (url.pathname === "/privacy" && request.method === "GET") return privacyPage();
       if (url.pathname === "/terms" && request.method === "GET") return termsPage();
