@@ -212,10 +212,10 @@ dialog.vid .x{all:unset;box-sizing:border-box;position:absolute;top:-2.6rem;righ
 dialog.vid .x:hover{color:var(--red)}dialog.vid .x:focus-visible{outline:2px solid #fff;outline-offset:1px}
 .tags{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding:0 .95rem .6rem;font:600 .75rem/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:rgba(236,232,225,.7)}
 .tier{display:inline-flex;align-items:center;gap:.35rem;color:var(--tier,#ece8e1)}
-.vars{display:flex;gap:.4rem;flex-wrap:wrap;padding:0 .95rem .85rem}
-.sw{all:unset;box-sizing:border-box;cursor:pointer;width:24px;height:24px;border:2px solid transparent;display:grid;place-items:center;transition:border-color .2s}
+.vars{display:flex;gap:.5rem;flex-wrap:wrap;padding:0 .95rem .85rem}
+.sw{all:unset;box-sizing:border-box;cursor:pointer;width:36px;height:36px;border:2px solid transparent;display:grid;place-items:center;transition:border-color .2s}
 .sw:hover{border-color:rgba(236,232,225,.5)}.sw.on{border-color:var(--tier,#ece8e1)}.sw:focus-visible{outline:2px solid #fff;outline-offset:1px}
-.sw img,.sw span{width:18px;height:18px;object-fit:cover;display:block}
+.sw img,.sw span{width:28px;height:28px;object-fit:cover;display:block}
 .skin.accy{--tier:#4d6a8f;box-shadow:inset 0 3px 0 var(--tier)}
 .accy .art img{position:absolute;inset:1rem;width:calc(100% - 2rem);height:calc(100% - 2rem);object-fit:contain}
 .accy .art.txt span{font:700 1.3rem/1.15 var(--display);letter-spacing:.08em;text-transform:uppercase;text-align:center;color:rgba(236,232,225,.9)}
