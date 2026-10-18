@@ -3,8 +3,14 @@
     "name": "store",
     "type": 1,
     "description": "Show your Valorant daily store and Night Market",
-    "integration_types": [1],
-    "contexts": [0, 1, 2],
+    "integration_types": [
+      1
+    ],
+    "contexts": [
+      0,
+      1,
+      2
+    ],
     "options": [
       {
         "name": "account",
@@ -12,6 +18,88 @@
         "type": 3,
         "required": false,
         "autocomplete": true
+      }
+    ]
+  },
+  {
+    "name": "invite",
+    "type": 1,
+    "description": "Share one of your Riot accounts' stores with a Discord friend",
+    "integration_types": [
+      1
+    ],
+    "contexts": [
+      0,
+      1,
+      2
+    ],
+    "options": [
+      {
+        "name": "account",
+        "description": "Which of your linked Riot accounts to share",
+        "type": 3,
+        "required": true,
+        "autocomplete": true
+      },
+      {
+        "name": "friend",
+        "description": "Who to invite",
+        "type": 6,
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "friends",
+    "description": "See and manage who can view your shared Riot accounts",
+    "integration_types": [
+      1
+    ],
+    "contexts": [
+      0,
+      1,
+      2
+    ],
+    "options": [
+      {
+        "name": "list",
+        "description": "Show what you share and what is shared with you",
+        "type": 1
+      },
+      {
+        "name": "revoke",
+        "description": "Stop sharing one of your accounts with a friend",
+        "type": 1,
+        "options": [
+          {
+            "name": "account",
+            "description": "Your Riot account",
+            "type": 3,
+            "required": true,
+            "autocomplete": true
+          },
+          {
+            "name": "friend",
+            "description": "The friend to remove",
+            "type": 3,
+            "required": true,
+            "autocomplete": true
+          }
+        ]
+      },
+      {
+        "name": "leave",
+        "description": "Remove an account a friend shared with you",
+        "type": 1,
+        "options": [
+          {
+            "name": "account",
+            "description": "The shared account",
+            "type": 3,
+            "required": true,
+            "autocomplete": true
+          }
+        ]
       }
     ]
   }

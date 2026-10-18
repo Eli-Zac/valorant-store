@@ -148,6 +148,8 @@ nav .btn:hover{text-decoration:none}
 .chip:hover{color:var(--text);text-decoration:none}
 .chip.on{background:var(--red);color:#fff}
 .chip.add{background:var(--fill)}
+.chip .fr{font-size:10px;letter-spacing:.12em;margin-left:.4rem;padding:.2rem .35rem;border:1px solid currentColor;opacity:.8}
+.shared{flex-basis:100%;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}.shared .pill{display:inline-flex;align-items:center;gap:.5rem;margin:0;padding:.25rem .3rem .25rem .7rem;background:var(--card2)}
 .wide{grid-column:1/-1}
 .acc{display:flex;align-items:center;flex-wrap:wrap;gap:.8rem 1.2rem;padding:1rem 0;border-top:1px solid var(--line)}
 .head+.acc{border-top:0}
@@ -366,7 +368,9 @@ function render(snap, origin) {
 const MAX_ACCOUNTS = 5;
 const PUUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const validAcct = (p) => PUUID_RE.test(String(p));
-const acctName = (a, i) => a.name || `Account ${i + 1}`;
+// Accounts a friend shared with you carry owner and ownerName, and are labelled with who shared them.
+const acctName = (a, i) =>
+  a.owner ? `${a.name || "Account"} (shared by ${a.ownerName || "a friend"})` : a.name || `Account ${i + 1}`;
 
 async function getAccounts(env, uid) {
   const list = await env.STORE.get("accs:" + uid, "json");
@@ -401,6 +405,52 @@ async function removeAccount(env, uid, puuid) {
   await env.STORE.put("accs:" + uid, JSON.stringify(list));
   await env.STORE.delete(`riot:${uid}:${puuid}`);
   await env.STORE.delete(`snap:${uid}:${puuid}`);
+  // Friends lose access when the owner unlinks the account.
+  await Promise.all((await getShares(env, uid, puuid)).map((f) => unshare(env, uid, puuid, f.id)));
+}
+
+// ---------- Sharing an account with Discord friends ----------
+// share:<owner>:<puuid>  who the owner shared it with: [{ id, name }]
+// shared:<friend>        what was shared with a friend:  [{ owner, ownerName, puuid }]
+// invite:<token>         a pending invite (expires after a day); pending:<owner>:<puuid>:<friend> blocks duplicates.
+// A friend only ever reads the store snapshot. Riot logins stay under the owner's id.
+
+const MAX_FRIENDS = 5;
+const INVITE_TTL = 86400;
+
+const getShares = async (env, owner, puuid) => (await env.STORE.get(`share:${owner}:${puuid}`, "json")) || [];
+const getSharedIn = async (env, uid) => (await env.STORE.get("shared:" + uid, "json")) || [];
+
+async function putList(env, key, list) {
+  if (list.length) await env.STORE.put(key, JSON.stringify(list));
+  else await env.STORE.delete(key);
+}
+
+// Removes one friend's access from both sides. Used by the owner (revoke), the friend (leave) and unlinking.
+async function unshare(env, owner, puuid, friendId) {
+  const [shares, shared] = await Promise.all([getShares(env, owner, puuid), getSharedIn(env, friendId)]);
+  await Promise.all([
+    putList(env, `share:${owner}:${puuid}`, shares.filter((f) => f.id !== friendId)),
+    putList(env, "shared:" + friendId, shared.filter((x) => !(x.owner === owner && x.puuid === puuid))),
+  ]);
+}
+
+// Your own accounts followed by the ones friends shared with you. A shared account whose owner no
+// longer has it linked is left out, so access can never outlive an unlink.
+async function getViewAccounts(env, uid) {
+  const [own, shared] = await Promise.all([getAccounts(env, uid), getSharedIn(env, uid)]);
+  if (!shared.length) return own;
+  const owners = [...new Set(shared.map((x) => x.owner))];
+  const lists = new Map(await Promise.all(owners.map(async (o) => [o, await getAccounts(env, o)])));
+  const out = [...own];
+  const dead = [];
+  for (const x of shared) {
+    const a = (lists.get(x.owner) || []).find((y) => y.puuid === x.puuid);
+    if (!a) dead.push(x);
+    else if (!own.some((y) => y.puuid === x.puuid)) out.push({ puuid: x.puuid, name: a.name, owner: x.owner, ownerName: x.ownerName });
+  }
+  if (dead.length) await putList(env, "shared:" + uid, shared.filter((x) => !dead.includes(x)));
+  return out;
 }
 
 // Reads one account's snapshot. If it is missing or the store has rotated (or force is set) and the
@@ -443,14 +493,14 @@ function matchAccounts(accs, filter = "") {
 
 // Returns the store text for Claude: every linked account, or the one matching `filter`.
 async function getStoreText(env, userId, origin, filter = "") {
-  const accs = await getAccounts(env, userId);
+  const accs = await getViewAccounts(env, userId);
   if (!accs.length) return render(null, origin);
   const names = accs.map(acctName);
   const picked = matchAccounts(accs, filter);
   if (!picked.length) return `No linked Riot account matches "${filter}". Linked accounts: ${names.join(", ")}.`;
   const parts = await Promise.all(
     picked.map(async ({ a }) => {
-      const r = await loadSnapshot(env, userId, a.puuid);
+      const r = await loadSnapshot(env, a.owner || userId, a.puuid);
       let note = "";
       if (r.expired) note = `\n\nThis account's saved Riot login has expired. Reconnect at ${origin}/accounts.`;
       else if (r.failed) note = `\n\nCould not refresh from Riot${r.error ? ": " + r.error : "."}`;
@@ -634,9 +684,12 @@ const flashBox = (flash) =>
 
 async function storeView(env, sess, origin, flash = "", preloaded = null, sel = "") {
   const uid = sess.userId;
-  const accs = await getAccounts(env, uid);
+  const accs = await getViewAccounts(env, uid);
   const idx = Math.max(0, accs.findIndex((a) => a.puuid === sel));
   const cur = accs[idx];
+  const friend = Boolean(cur?.owner);
+  const dataUid = cur?.owner || uid;
+  const ownCount = accs.filter((a) => !a.owner).length;
   const lead = `Signed in as <strong>${esc(sess.login)}</strong>.`;
 
   if (!cur) {
@@ -653,9 +706,9 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
     );
   }
 
-  const loaded = preloaded ?? (await loadSnapshot(env, uid, cur.puuid));
+  const loaded = preloaded ?? (await loadSnapshot(env, dataUid, cur.puuid));
   const snap = loaded.snap;
-  const riot = await env.STORE.get(`riot:${uid}:${cur.puuid}`, "json");
+  const riot = await env.STORE.get(`riot:${dataUid}:${cur.puuid}`, "json");
   const now = Date.now();
   const ago = (ms) => `${fmtDur(now - ms)} ago`;
   const csrf = `<input type="hidden" name="csrf" value="${esc(sess.csrf)}"><input type="hidden" name="puuid" value="${esc(cur.puuid)}">`;
@@ -663,30 +716,32 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
 
   let note = "";
   if (!preloaded) {
-    if (loaded.expired) note = warn("This account's saved Riot login has expired. Reconnect on the Accounts tab.");
+    if (loaded.expired) note = warn(friend ? `${cur.ownerName || "The owner"} needs to reconnect this account.` : "This account's saved Riot login has expired. Reconnect on the Accounts tab.");
     else if (loaded.failed) note = warn("Could not refresh from Riot" + (loaded.error ? ": " + loaded.error : "."));
   }
 
   const chips = `<div class="accts">${accs
     .map(
       (a, i) =>
-        `<a class="chip${i === idx ? " on" : ""}" href="/store?acc=${esc(a.puuid)}"${i === idx ? ' aria-current="true"' : ""}>${esc(acctName(a, i))}</a>`
+        `<a class="chip${i === idx ? " on" : ""}" href="/store?acc=${esc(a.puuid)}"${i === idx ? ' aria-current="true"' : ""}>${esc(acctName(a, i))}${a.owner ? ' <span class="fr">Friend</span>' : ""}</a>`
     )
-    .join("")}${accs.length < MAX_ACCOUNTS ? '<a class="chip add" href="/accounts">+ Add account</a>' : ""}</div>`;
+    .join("")}${ownCount < MAX_ACCOUNTS ? '<a class="chip add" href="/accounts">+ Add account</a>' : ""}</div>`;
 
   let body;
   if (!snap) {
     body = `${note}<section class="card empty">
 <div class="head"><h2>No store yet</h2></div>
-<p class="sub">This account has no store snapshot yet. Add it again on the Accounts tab.</p>
-<div class="actions"><a class="btn" href="/accounts">Open Accounts</a></div>
+<p class="sub">${friend ? `This account has no store snapshot yet. ${esc(cur.ownerName || "The owner")} needs to update it.` : "This account has no store snapshot yet. Add it again on the Accounts tab."}</p>
+${friend ? "" : '<div class="actions"><a class="btn" href="/accounts">Open Accounts</a></div>'}
 </section>`;
   } else {
     const stale = now > snap.daily_ends_at * 1000;
     const nm = snap.night_market;
     const nmLive = nm && now < nm.ends_at * 1000 && (nm.items || []).length;
     const total = (snap.daily || []).reduce((n, s) => n + (Number(s.vp) || 0), 0);
-    const tool = riot?.sealed
+    const tool = friend
+      ? `<span class="badge">Shared by ${esc(cur.ownerName || "a friend")}</span>`
+      : riot?.sealed
       ? `<form method="post" action="/account/refresh">${csrf}<button class="sec sm">Refresh</button></form>`
       : `<a class="btn sec sm" href="/accounts">Update store</a>`;
     body = `${note}<div class="strip">
@@ -699,7 +754,7 @@ async function storeView(env, sess, origin, flash = "", preloaded = null, sel = 
 <div class="stat"><span class="k">Updated</span><span class="v">${esc(ago(snap.fetched_at * 1000))}</span></div>
 <div class="tools">${tool}</div>
 </div>
-${stale ? `<p class="sub" style="margin:0 0 1rem">This snapshot is from ${esc(ago(snap.fetched_at * 1000))}, before the store rotated. ${riot?.sealed ? "Hit Refresh." : "Update it from the Accounts tab."}</p>` : ""}
+${stale ? `<p class="sub" style="margin:0 0 1rem">This snapshot is from ${esc(ago(snap.fetched_at * 1000))}, before the store rotated. ${friend ? `${esc(cur.ownerName || "The owner")} needs to update it.` : riot?.sealed ? "Hit Refresh." : "Update it from the Accounts tab."}</p>` : ""}
 <section class="sect${stale ? " stale" : ""}">
 <div class="head"><h2>Daily store</h2></div>
 <div class="skins">${(snap.daily || []).map((s, i) => skinCard(s, i)).join("")}</div>
@@ -746,8 +801,9 @@ async function accountsView(env, sess, origin, flash = "") {
 <div class="acts">
 <a class="btn sec sm" href="/store?acc=${esc(a.puuid)}">View</a>
 ${rec?.sealed ? `<form method="post" action="/account/refresh">${hid}<button class="sec sm">Refresh</button></form>` : ""}
-<form method="post" action="/account/remove" onsubmit="return confirm('Remove this account and its saved store?')">${hid}<button class="danger sm">Remove</button></form>
+<form method="post" action="/account/remove" onsubmit="return confirm('Remove this account and its saved store? Friends you shared it with lose access.')">${hid}<button class="danger sm">Remove</button></form>
 </div>
+${people(a, i)}
 </div>`;
   };
 
@@ -771,6 +827,17 @@ ${["ssid", "clid", "csid", "tdid"]
 </details>`
     : "";
 
+  const shares = await Promise.all(accs.map((a) => getShares(env, uid, a.puuid)));
+  const sharedIn = (await getViewAccounts(env, uid)).filter((a) => a.owner);
+  const people = (a, i) =>
+    shares[i].length
+      ? `<div class="shared"><span class="sub">Shared with</span>${shares[i]
+          .map(
+            (f) =>
+              `<form method="post" action="/account/unshare" class="pill">${csrf}<input type="hidden" name="puuid" value="${esc(a.puuid)}"><input type="hidden" name="friend" value="${esc(f.id)}"><span>${esc(f.name || "Friend")}</span><button class="danger sm" onclick="return confirm('Stop sharing this account with this friend?')">Revoke</button></form>`
+          )
+          .join("")}</div>`
+      : "";
   const full = accs.length >= MAX_ACCOUNTS;
   const add = full
     ? `<section class="card wide">
@@ -808,6 +875,25 @@ ${accs.map(row).join("\n")}
     : ""
 }
 ${add}
+${
+  sharedIn.length
+    ? `<section class="card wide">
+<div class="head"><h2>Shared with you</h2><span class="badge">${sharedIn.length}</span></div>
+${sharedIn
+  .map(
+    (a) => `<div class="acc">
+<div class="who2"><strong class="aname">${esc(a.name || "Account")}</strong><span class="sub">Shared by ${esc(a.ownerName || "a friend")}. If they unlink it, you lose it.</span></div>
+<span class="badge">Friend</span>
+<div class="acts">
+<a class="btn sec sm" href="/store?acc=${esc(a.puuid)}">View</a>
+<form method="post" action="/account/unshare" onsubmit="return confirm('Remove this shared account from your list?')">${csrf}<input type="hidden" name="puuid" value="${esc(a.puuid)}"><input type="hidden" name="owner" value="${esc(a.owner)}"><button class="danger sm">Remove</button></form>
+</div>
+</div>`
+  )
+  .join("\n")}
+</section>`
+    : ""
+}
 </div>`,
     { lead: `Link up to ${MAX_ACCOUNTS} Riot accounts to your Discord login. You log in on Riot's own page.` }
   );
@@ -933,6 +1019,19 @@ async function accountPost(request, env, url) {
       await removeAccount(env, sess.userId, target.puuid);
       return accountsView(env, sess, url.origin, `Disconnected ${acctName(target, accs.indexOf(target))}. Its Riot connection and saved store were deleted.`);
     }
+    case "/account/unshare": {
+      const owner = String(form.get("owner") || "");
+      if (owner) {
+        // A friend removing an account that was shared with them.
+        if (!validAcct(puuid)) return accountsView(env, sess, url.origin, "That account is not shared with you.");
+        await unshare(env, owner, puuid, sess.userId);
+        return accountsView(env, sess, url.origin, "Done. The shared account was removed from your list.");
+      }
+      // The owner revoking one friend.
+      if (!target) return accountsView(env, sess, url.origin, "That account is not linked.");
+      await unshare(env, sess.userId, target.puuid, String(form.get("friend") || ""));
+      return accountsView(env, sess, url.origin, "Done. That friend no longer has access.");
+    }
     case "/account/signout":
       await env.STORE.delete("sess:" + sess.id);
       return new Response(null, { status: 302, headers: { Location: "/", "Set-Cookie": setCookie(SESS_COOKIE, "", 0) } });
@@ -1035,20 +1134,169 @@ function storeEmbed(name, r, origin) {
 
 async function storeCommand(env, interaction, userId, origin) {
   const opt = (interaction.data.options || []).find((o) => o.name === "account");
-  const accs = await getAccounts(env, userId);
+  const accs = await getViewAccounts(env, userId);
   if (!accs.length) return { content: `You have not linked a Riot account yet. Do it at ${origin}/accounts, then run /store again.` };
   const picked = matchAccounts(accs, opt?.value);
   if (!picked.length) {
     return { content: `No linked Riot account matches "${opt.value}". Linked accounts: ${accs.map(acctName).join(", ")}.` };
   }
   const loaded = await Promise.all(
-    picked.map(async ({ a, name }) => ({ name, puuid: a.puuid, r: await loadSnapshot(env, userId, a.puuid) }))
+    picked.map(async ({ a, name }) => ({ name, puuid: a.puuid, r: await loadSnapshot(env, a.owner || userId, a.puuid) }))
   );
   let embeds = loaded.flatMap(({ name, r, puuid }) => storeEmbeds(name, r, origin, puuid));
   if (embeds.length > MAX_EMBEDS) embeds = loaded.map(({ name, r }) => storeEmbed(name, r, origin));
   // A link button (type 2, style 5) under the embeds that opens the web app.
   const components = [{ type: 1, components: [{ type: 2, style: 5, label: "Open store", url: `${origin}/store` }] }];
   return { embeds, components };
+}
+
+// Options as { name: value }, looking inside a subcommand when there is one.
+const optionMap = (interaction) => {
+  const top = interaction.data?.options || [];
+  const sub = top.find((o) => o.type === 1);
+  return { sub: sub?.name || "", opts: Object.fromEntries((sub ? sub.options || [] : top).map((o) => [o.name, o.value])) };
+};
+
+// /invite: posts an Accept / Decline message in the chat where it ran. Only the invited person can answer.
+async function inviteCommand(env, interaction, user) {
+  const { opts } = optionMap(interaction);
+  const own = await getAccounts(env, user.id);
+  if (!own.length) return reply("You have not linked a Riot account yet. Link one on the website first.");
+  const matches = matchAccounts(own, opts.account);
+  const exact = matches.filter((m) => m.a.puuid === opts.account);
+  const picked = exact.length === 1 ? exact : matches;
+  if (picked.length !== 1) return reply("Pick one of your linked accounts from the list.");
+  const { a, name } = picked[0];
+  const friendId = String(opts.friend || "");
+  const fu = interaction.data?.resolved?.users?.[friendId];
+  if (!fu || fu.bot) return reply("Pick a real Discord user to invite.");
+  if (friendId === user.id) return reply("You can not invite yourself.");
+  const shares = await getShares(env, user.id, a.puuid);
+  if (shares.some((f) => f.id === friendId)) return reply("They already have access to that account.");
+  if (shares.length >= MAX_FRIENDS) return reply(`You can share an account with up to ${MAX_FRIENDS} friends. Revoke one with /friends revoke first.`);
+  const pending = `pending:${user.id}:${a.puuid}:${friendId}`;
+  if (await env.STORE.get(pending)) return reply("You already have an invite waiting for them on that account.");
+  const token = randHex(16);
+  await env.STORE.put(`invite:${token}`, JSON.stringify({ owner: user.id, ownerName: user.login, puuid: a.puuid, name, invitee: friendId }), { expirationTtl: INVITE_TTL });
+  await env.STORE.put(pending, token, { expirationTtl: INVITE_TTL });
+  const ends = Math.floor(Date.now() / 1000) + INVITE_TTL;
+  return json({
+    type: 4,
+    data: {
+      content: `<@${friendId}>`,
+      allowed_mentions: { users: [friendId] },
+      embeds: [
+        {
+          title: "Valorant store invite",
+          color: 0xff4655,
+          description: `**${user.login}** wants to share their Riot account **${name}** with you.\n\nIf you accept, you can see its daily store and Night Market with /store and on the website, and they will see your name in their list. Either of you can remove it any time, and it ends if they unlink the account.\n\nThis invite expires <t:${ends}:R>.`,
+        },
+      ],
+      components: [
+        {
+          type: 1,
+          components: [
+            { type: 2, style: 3, label: "Accept", custom_id: `inv:a:${token}` },
+            { type: 2, style: 4, label: "Decline", custom_id: `inv:d:${token}` },
+          ],
+        },
+      ],
+    },
+  });
+}
+
+// The Accept / Decline buttons. Updates the invite message in place.
+async function inviteButton(env, interaction, user, allowed) {
+  const [, act, token] = String(interaction.data.custom_id).split(":");
+  const inv = /^[0-9a-f]{32}$/.test(token || "") ? await env.STORE.get(`invite:${token}`, "json") : null;
+  if (!inv) return reply("This invite has expired or was already answered.");
+  if (user.id !== inv.invitee) return reply("This invite is not for you.");
+  if (!allowed) return reply("Your Discord account is not on this server's allow list.");
+  await Promise.all([env.STORE.delete(`invite:${token}`), env.STORE.delete(`pending:${inv.owner}:${inv.puuid}:${inv.invitee}`)]);
+  const done = (text) => json({ type: 7, data: { content: "", allowed_mentions: { parse: [] }, embeds: [{ title: "Valorant store invite", color: 0xff4655, description: text }], components: [] } });
+  if (act !== "a") return done(`<@${inv.invitee}> declined the invite from **${inv.ownerName}**.`);
+  const [ownerAccs, shares, mine, sharedIn] = await Promise.all([
+    getAccounts(env, inv.owner),
+    getShares(env, inv.owner, inv.puuid),
+    getAccounts(env, user.id),
+    getSharedIn(env, user.id),
+  ]);
+  if (!ownerAccs.some((a) => a.puuid === inv.puuid)) return done(`That account is no longer linked by **${inv.ownerName}**.`);
+  if (mine.some((a) => a.puuid === inv.puuid) || sharedIn.some((x) => x.owner === inv.owner && x.puuid === inv.puuid)) {
+    return done(`<@${inv.invitee}> already has that account.`);
+  }
+  if (shares.length >= MAX_FRIENDS) return done(`**${inv.ownerName}** has reached the limit of ${MAX_FRIENDS} friends on that account.`);
+  await Promise.all([
+    putList(env, `share:${inv.owner}:${inv.puuid}`, [...shares, { id: user.id, name: user.login }]),
+    putList(env, "shared:" + user.id, [...sharedIn, { owner: inv.owner, ownerName: inv.ownerName, puuid: inv.puuid }]),
+  ]);
+  return done(`<@${inv.invitee}> accepted. **${inv.name}** now shows up in their /store and on the website.`);
+}
+
+// /friends list | revoke | leave: manage sharing from Discord (always private to the person who ran it).
+async function friendsCommand(env, interaction, user) {
+  const { sub, opts } = optionMap(interaction);
+  const own = await getAccounts(env, user.id);
+  if (sub === "revoke") {
+    const m = matchAccounts(own, opts.account);
+    const a = (m.find((x) => x.a.puuid === opts.account) || (m.length === 1 ? m[0] : null))?.a;
+    if (!a) return reply("Pick one of your linked accounts from the list.");
+    const want = String(opts.friend || "").toLowerCase();
+    const f = (await getShares(env, user.id, a.puuid)).find((x) => x.id === opts.friend || String(x.name).toLowerCase() === want);
+    if (!f) return reply("That friend does not have access to that account.");
+    await unshare(env, user.id, a.puuid, f.id);
+    return reply(`Done. **${f.name}** no longer has access to that account.`);
+  }
+  if (sub === "leave") {
+    const [owner, puuid] = String(opts.account || "").split(":");
+    const x = (await getSharedIn(env, user.id)).find((y) => y.owner === owner && y.puuid === puuid);
+    if (!x) return reply("Pick a shared account from the list.");
+    await unshare(env, owner, puuid, user.id);
+    return reply(`Done. You no longer have access to the account shared by **${x.ownerName}**.`);
+  }
+  const [shares, sharedIn] = await Promise.all([Promise.all(own.map((a) => getShares(env, user.id, a.puuid))), getSharedIn(env, user.id)]);
+  const lines = [];
+  own.forEach((a, i) => {
+    if (shares[i].length) lines.push(`**${acctName(a, i)}** is shared with ${shares[i].map((f) => f.name || "a friend").join(", ")}`);
+  });
+  const mineLines = lines.length ? lines.join("\n") : "You have not shared any accounts. Use /invite.";
+  const inLines = sharedIn.length ? sharedIn.map((x) => `Shared by **${x.ownerName}**`).join("\n") : "Nobody has shared an account with you.";
+  return reply(`**You share**\n${mineLines}\n\n**Shared with you**\n${inLines}`);
+}
+
+// Autocomplete choices for /store, /invite and /friends.
+async function autocomplete(env, interaction, user, allowed) {
+  const top = interaction.data?.options || [];
+  const sub = top.find((o) => o.type === 1);
+  const list = sub ? sub.options || [] : top;
+  const focused = list.find((o) => o.focused);
+  const typed = String(focused?.value || "");
+  const cmd = interaction.data?.name;
+  const has = (x, f) => String(x).toLowerCase().includes(f.toLowerCase());
+  let choices = [];
+  if (allowed) {
+    if (cmd === "store") {
+      choices = matchAccounts(await getViewAccounts(env, user.id), typed).map((p) => ({ name: p.name, value: p.a.puuid }));
+    } else if (cmd === "invite") {
+      choices = matchAccounts(await getAccounts(env, user.id), typed).map((p) => ({ name: p.name, value: p.a.puuid }));
+    } else if (cmd === "friends" && sub?.name === "revoke" && focused?.name === "friend") {
+      const puuid = list.find((o) => o.name === "account")?.value;
+      choices = validAcct(puuid)
+        ? (await getShares(env, user.id, puuid)).filter((f) => has(f.name, typed)).map((f) => ({ name: String(f.name || "Friend"), value: f.id }))
+        : [];
+    } else if (cmd === "friends" && sub?.name === "revoke") {
+      const own = await getAccounts(env, user.id);
+      const counts = await Promise.all(own.map((a) => getShares(env, user.id, a.puuid)));
+      choices = matchAccounts(own, typed)
+        .filter((p) => counts[own.indexOf(p.a)].length)
+        .map((p) => ({ name: p.name, value: p.a.puuid }));
+    } else if (cmd === "friends" && sub?.name === "leave") {
+      choices = (await getViewAccounts(env, user.id))
+        .filter((a) => a.owner && has(acctName(a, 0), typed))
+        .map((a) => ({ name: acctName(a, 0), value: `${a.owner}:${a.puuid}` }));
+    }
+  }
+  return json({ type: 8, data: { choices: choices.slice(0, 25).map((c) => ({ name: c.name.slice(0, 100), value: c.value })) } });
 }
 
 // loadSnapshot can call Riot, which may take longer than the 3 seconds Discord allows for a first
@@ -1074,14 +1322,20 @@ async function interactions(request, env, ctx) {
   const user = { id: String(du.id), username: String(du.username || ""), login: String(du.global_name || du.username || "") };
   const allowed = isAllowed(env, user);
 
-  if (interaction.type === 4) {
-    // Autocomplete for the "account" option: this user's linked accounts, filtered by what they typed.
-    const typed = String(interaction.data?.options?.find((o) => o.focused)?.value || "");
-    const accs = allowed ? await getAccounts(env, user.id) : [];
-    const choices = matchAccounts(accs, typed)
-      .slice(0, 25)
-      .map((p) => ({ name: p.name.slice(0, 100), value: p.a.puuid }));
-    return json({ type: 8, data: { choices } });
+  if (interaction.type === 4) return autocomplete(env, interaction, user, allowed);
+
+  if (interaction.type === 3 && String(interaction.data?.custom_id || "").startsWith("inv:")) {
+    return inviteButton(env, interaction, user, allowed);
+  }
+
+  if (interaction.type === 2 && (interaction.data?.name === "invite" || interaction.data?.name === "friends")) {
+    if (!allowed) return reply("Your Discord account is not on this server's allow list.");
+    try {
+      return await (interaction.data.name === "invite" ? inviteCommand(env, interaction, user) : friendsCommand(env, interaction, user));
+    } catch (e) {
+      console.error(e);
+      return reply("Something went wrong. Try again in a moment.");
+    }
   }
 
   if (interaction.type === 2 && interaction.data?.name === "store") {
@@ -1205,6 +1459,7 @@ const privacyPage = () =>
 <li><strong>Discord sign-in.</strong> When you sign in we ask Discord for the <code>identify</code> scope only. We keep your Discord user ID, username and display name so we can tell users apart and show your name. We do not ask for your email address, servers, friends or messages, and we discard the Discord access token straight after reading your profile.</li>
 <li><strong>Riot account details.</strong> When you link a Riot account we keep its Riot account ID (PUUID), its region, its Riot ID (name and tag) if Riot provides it, and when you linked it.</li>
 <li><strong>Your store.</strong> We save the latest snapshot of your store so we can show it again: skin names, images and VP prices, the Night Market if there is one, and when they rotate. This is the whole point of the service.</li>
+<li><strong>Sharing.</strong> If you invite a Discord user to see one of your Riot accounts and they accept, we save who shared what with whom (Discord IDs and names). They can see that account's store, including its name, but never your Riot login. Either of you can end it at any time, and it ends when you unlink the account.</li>
 <li><strong>Your Riot login.</strong> You log in on Riot's own page, so we never see your password. The address you paste back contains short-lived Riot tokens. We use them once to read your store and then discard them. They are not saved.</li>
 <li><strong>"Stay logged in" (optional, off by default).</strong> If you turn it on, we also save your Riot login cookies, encrypted, and use them only to refresh your store when it has rotated. The encryption key is a secret held by the operator, so the operator could technically decrypt them. Only turn this on if you trust the operator. You can remove it at any time by removing the account.</li>
 <li><strong>Sign-in session.</strong> We set one strictly necessary cookie to keep you signed in and keep a matching server-side session record (your Discord ID and name, plus a token that protects forms). It expires after one hour.</li>
