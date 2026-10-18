@@ -13,7 +13,7 @@ import OAuthProvider, {
 } from "@cloudflare/workers-oauth-provider";
 
 import { skinTile } from "./storeimage.js";
-import { RIOT_LOGIN_URL, RiotError, fetchSnapshot, parseCookies, parseTokens, reauth, seal, unseal } from "./riot.js";
+import { RIOT_LOGIN_URL, RiotError, SNAPSHOT_VERSION, fetchSnapshot, parseCookies, parseTokens, reauth, seal, unseal } from "./riot.js";
 
 const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
 const randHex = (n) => hex(crypto.getRandomValues(new Uint8Array(n)));
@@ -399,7 +399,7 @@ async function loadSnapshot(env, userId, puuid, { force = false } = {}) {
   const snapKey = `snap:${userId}:${puuid}`;
   const riotKey = `riot:${userId}:${puuid}`;
   const out = { snap: await env.STORE.get(snapKey, "json"), attempted: false, expired: false, failed: false, error: "" };
-  if (!force && out.snap && Date.now() <= out.snap.daily_ends_at * 1000) return out;
+  if (!force && out.snap?.v === SNAPSHOT_VERSION && Date.now() <= out.snap.daily_ends_at * 1000) return out;
   const rec = await env.STORE.get(riotKey, "json");
   if (!rec?.sealed || !env.RIOT_ENCRYPTION_KEY) return out;
   out.attempted = true;
