@@ -25,7 +25,7 @@ Everyone signs in with their own Discord account and only sees their own store. 
 | `DISCORD_CLIENT_SECRET` | Discord application client secret |
 | `DISCORD_PUBLIC_KEY` | Discord application public key (General Information page), used to verify `/store` requests |
 
-Optional: add a repository **variable** `ALLOWED_DISCORD_USERS` (Discord usernames or ids, for example `eli_zac,123456789012345678`) to restrict who can sign in. Leave it unset to allow any Discord user.
+Optional: add a repository **variable** `ALLOWED_DISCORD_USERS` (Discord user ids, for example `123456789012345678,234567890123456789`) to restrict who can sign in. Leave it unset to allow any Discord user.
 
 Then run Actions > Deploy Worker > Run workflow. It finds or creates the KV namespace and deploys. Pushes to `worker/` redeploy automatically.
 

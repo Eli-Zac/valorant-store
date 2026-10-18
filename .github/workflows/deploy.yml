@@ -47,7 +47,7 @@ jobs:
           sed -i "s/REPLACE_WITH_KV_NAMESPACE_ID/$ID/g" wrangler.toml
 
       # Optional: set a repository variable ALLOWED_DISCORD_USERS (comma-separated Discord
-      # usernames or ids) to restrict who can sign in. Leave it unset to allow any Discord user.
+      # user ids) to restrict who can sign in. Leave it unset to allow any Discord user.
       - name: Apply optional allow list
         if: ${{ vars.ALLOWED_DISCORD_USERS != '' }}
         env:
