@@ -116,15 +116,56 @@ async function riotJson(url, opts, what) {
   return r.json();
 }
 
-// Name and icon for a skin level, cached for 30 days.
+// Skin catalogue and content tiers (rarity), fetched at most once per isolate while warm.
+let catalogue = null;
+function loadCatalogue() {
+  catalogue ||= Promise.all([
+    fetch(`${VAPI}/v1/weapons/skins`).then((r) => r.json()),
+    fetch(`${VAPI}/v1/contenttiers`).then((r) => r.json()),
+  ])
+    .then(([skins, tiers]) => {
+      const byLevel = new Map();
+      for (const sk of skins?.data || []) for (const l of sk.levels || []) byLevel.set(l.uuid, sk);
+      const tierMap = new Map((tiers?.data || []).map((t) => [t.uuid, t]));
+      return { byLevel, tierMap };
+    })
+    .catch((e) => {
+      catalogue = null;
+      throw e;
+    });
+  return catalogue;
+}
+
+// Name, icon, rarity and variants for a skin level, cached for 30 days.
 async function skinInfo(env, uuid) {
-  const cached = await env.STORE.get("skin2:" + uuid, "json");
+  const cached = await env.STORE.get("skin3:" + uuid, "json");
   if (cached) return cached;
   try {
     const d = (await (await fetch(`${VAPI}/v1/weapons/skinlevels/${uuid}`)).json())?.data;
     if (d?.displayName) {
       const info = { name: d.displayName, icon: d.displayIcon || null };
-      await env.STORE.put("skin2:" + uuid, JSON.stringify(info), { expirationTtl: 30 * 86400 });
+      try {
+        const { byLevel, tierMap } = await loadCatalogue();
+        const sk = byLevel.get(uuid);
+        if (sk) {
+          const t = tierMap.get(sk.contentTierUuid);
+          if (t) {
+            info.tier = {
+              name: t.displayName.replace(/ Edition$/, ""),
+              color: /^[0-9a-f]{6}/i.test(t.highlightColor || "") ? t.highlightColor.slice(0, 6) : null,
+              icon: t.displayIcon || null,
+            };
+          }
+          info.levels = (sk.levels || []).length;
+          // The first chroma is the base skin; the rest are the variants shown in game.
+          info.chromas = (sk.chromas || []).slice(1).map((c) => ({
+            name: String(c.displayName || "").replace(/^.*\(([^)]*)\)\s*$/s, "$1").replace(/^Variant \d+\s*/, "").trim() || "Variant",
+            swatch: c.swatch || null,
+            icon: c.fullRender || c.displayIcon || null,
+          }));
+        }
+      } catch {}
+      if (info.tier) await env.STORE.put("skin3:" + uuid, JSON.stringify(info), { expirationTtl: 30 * 86400 });
       return info;
     }
   } catch {}
