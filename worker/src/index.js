@@ -13,6 +13,7 @@ import OAuthProvider, {
 } from "@cloudflare/workers-oauth-provider";
 
 import { RIOT_LOGIN_URL, RiotError, fetchSnapshot, parseCookies, parseTokens, reauth, seal, unseal } from "./riot.js";
+import { storeImage } from "./storeimage.js";
 
 const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
 const randHex = (n) => hex(crypto.getRandomValues(new Uint8Array(n)));
@@ -323,6 +324,8 @@ function render(snap, origin) {
     lines.push(`Daily store, rotates in ${fmtDur(snap.daily_ends_at * 1000 - now)} (snapshot ${fmtDur(ageMs)} old):`);
   }
   for (const s of snap.daily || []) lines.push(`- ${s.name}: ${s.vp} VP`);
+  const card = cardUrl(snap, origin);
+  if (card) embed.image = { url: card };
   const nm = snap.night_market;
   if (nm && now < nm.ends_at * 1000) {
     lines.push("", `Night Market, ends in ${fmtDur(nm.ends_at * 1000 - now)}:`);
@@ -922,23 +925,34 @@ const EPHEMERAL = 64;
 const reply = (content) => json({ type: 4, data: { content, flags: EPHEMERAL } });
 const vpText = (n) => `${(Number(n) || 0).toLocaleString("en-US")} VP`;
 
-// Discord shows one image per embed. Embeds that share a url get merged into a cropped 2x2 gallery,
-// so each daily skin gets its own embed (different url, none here) and shows uncropped at full width.
-// Discord allows 10 embeds a message.
-const MAX_EMBEDS = 10;
+// One image per account: the daily skins drawn onto a single card (see storeimage.js). Discord fetches
+// it from /store-image.png, which only draws icons from media.valorant-api.com.
+const ICON_BASE = "https://media.valorant-api.com/";
 
-function storeEmbeds(name, r, origin, gallery = true) {
-  const snap = r.snap;
-  const fresh = snap && Date.now() <= snap.daily_ends_at * 1000;
-  const items = gallery && fresh ? (snap.daily || []).slice(0, 4).filter((s) => safeIcon(s.icon)) : [];
-  const embed = storeEmbed(name, r, origin, items.length > 0);
-  return [
-    embed,
-    ...items.map((s) => ({ title: s.name, description: vpText(s.vp), color: embed.color, image: { url: safeIcon(s.icon) } })),
-  ];
+function cardUrl(snap, origin) {
+  if (Date.now() > snap.daily_ends_at * 1000) return null;
+  const icons = (snap.daily || []).slice(0, 4).map((s) => safeIcon(s.icon));
+  if (!icons.some(Boolean)) return null;
+  const q = new URLSearchParams();
+  for (const i of icons) q.append("u", i ? i.slice(ICON_BASE.length) : "");
+  return `${origin}/store-image.png?${q}`;
 }
 
-function storeEmbed(name, r, origin, skipDaily = false) {
+async function storeImageResponse(url, ctx) {
+  const cache = caches.default;
+  const key = new Request(url.origin + url.pathname + url.search);
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  const paths = url.searchParams.getAll("u").slice(0, 4);
+  const icons = paths.map((p) => (/^[\w\/.-]{1,200}$/.test(p) && !p.includes("..") ? ICON_BASE + p : null));
+  if (!icons.some(Boolean)) return new Response("not found", { status: 404 });
+  const png = await storeImage(icons.map((u) => u || ""), (u) => (u ? fetch(u) : new Response(null, { status: 404 })));
+  const res = new Response(png, { headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } });
+  ctx.waitUntil(cache.put(key, res.clone()));
+  return res;
+}
+
+function storeEmbed(name, r, origin) {
   const embed = { title: name, color: 0xff4655, fields: [] };
   const snap = r.snap;
   if (!snap) {
@@ -953,7 +967,7 @@ function storeEmbed(name, r, origin, skipDaily = false) {
   } else {
     embed.description = `Resets <t:${unix(snap.daily_ends_at)}:R>`;
   }
-  if (!skipDaily) embed.fields.push({ name: "Daily store", value: lines(snap.daily || []).slice(0, 1024) || "Empty" });
+  embed.fields.push({ name: "Daily store", value: lines(snap.daily || []).slice(0, 1024) || "Empty" });
   const nm = snap.night_market;
   if (nm && now < nm.ends_at * 1000 && (nm.items || []).length) {
     embed.fields.push({
@@ -977,9 +991,7 @@ async function storeCommand(env, interaction, userId, origin) {
   const loaded = await Promise.all(
     picked.map(async ({ a, name }) => ({ name, r: await loadSnapshot(env, userId, a.puuid) }))
   );
-  let embeds = loaded.flatMap(({ name, r }) => storeEmbeds(name, r, origin));
-  if (embeds.length > MAX_EMBEDS) embeds = loaded.map(({ name, r }) => storeEmbed(name, r, origin));
-  return { embeds };
+  return { embeds: loaded.map(({ name, r }) => storeEmbed(name, r, origin)) };
 }
 
 // loadSnapshot can call Riot, which may take longer than the 3 seconds Discord allows for a first
@@ -1306,6 +1318,7 @@ const defaultHandler = {
     const url = new URL(request.url);
     try {
       if (url.pathname === "/interactions" && request.method === "POST") return await interactions(request, env, ctx);
+      if (url.pathname === "/store-image.png" && request.method === "GET") return await storeImageResponse(url, ctx);
       if (url.pathname === "/authorize") {
         if (request.method === "GET") return await authorizeGet(request, env);
         if (request.method === "POST") return await authorizePost(request, env);
