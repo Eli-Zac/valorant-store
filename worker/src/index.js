@@ -405,17 +405,21 @@ async function loadSnapshot(env, userId, puuid, { force = false } = {}) {
   return out;
 }
 
+// Every linked account as { a, name }, or only the one whose id equals `filter` or whose name contains it.
+function matchAccounts(accs, filter = "") {
+  const picked = accs.map((a, i) => ({ a, name: acctName(a, i) }));
+  const f = String(filter || "").trim().toLowerCase();
+  if (!f) return picked;
+  return picked.filter((p) => p.a.puuid.toLowerCase() === f || p.name.toLowerCase().includes(f));
+}
+
 // Returns the store text for Claude: every linked account, or the one matching `filter`.
 async function getStoreText(env, userId, origin, filter = "") {
   const accs = await getAccounts(env, userId);
   if (!accs.length) return render(null, origin);
   const names = accs.map(acctName);
-  let picked = accs.map((a, i) => ({ a, name: names[i] }));
-  const f = String(filter || "").trim().toLowerCase();
-  if (f) {
-    picked = picked.filter((p) => p.name.toLowerCase().includes(f));
-    if (!picked.length) return `No linked Riot account matches "${filter}". Linked accounts: ${names.join(", ")}.`;
-  }
+  const picked = matchAccounts(accs, filter);
+  if (!picked.length) return `No linked Riot account matches "${filter}". Linked accounts: ${names.join(", ")}.`;
   const parts = await Promise.all(
     picked.map(async ({ a }) => {
       const r = await loadSnapshot(env, userId, a.puuid);
@@ -768,13 +772,19 @@ ${add}
 
 // ---------- Claude tab: the MCP connector ----------
 
-function claudeView(sess, origin) {
+function claudeView(env, sess, origin) {
   const url = `${origin}/mcp`;
+  const install = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(env.DISCORD_CLIENT_ID)}&integration_type=1&scope=applications.commands`;
   return acct(
     sess,
     "claude",
     "Ask Claude",
     `<div class="grid">
+<section class="card star">
+<div class="head"><h2>Use it in Discord</h2><span class="badge bad">/store</span></div>
+<p>Add the app to your Discord profile and type <em>/store</em> in any server, DM or group chat. Pick which linked Riot account to show. Only you can see the reply.</p>
+<div class="actions"><a class="btn orn" href="${esc(install)}" target="_blank" rel="noopener noreferrer">Add to Discord</a></div>
+</section>
 <section class="card">
 <div class="head"><h2>Add the connector</h2><span class="badge bad">MCP</span></div>
 <ol class="steps">
@@ -889,6 +899,120 @@ async function accountPost(request, env, url) {
   }
 }
 
+// ---------- Discord app: the /store slash command ----------
+// Discord POSTs every interaction to /interactions, signed with the app's Ed25519 key. The command is
+// installed to a user's profile (user install), so it works in servers, DMs and group chats. The
+// person who runs it is identified by their Discord id, the same id used for the web login, so the
+// "account" choices are exactly the Riot accounts they linked. Replies are only visible to them.
+
+const unhex = (s) => Uint8Array.from(s.match(/../g) || [], (h) => parseInt(h, 16));
+
+async function verifyDiscord(env, request, body) {
+  const sig = request.headers.get("X-Signature-Ed25519") || "";
+  const ts = request.headers.get("X-Signature-Timestamp") || "";
+  if (!env.DISCORD_PUBLIC_KEY || !ts || !/^[0-9a-f]{128}$/i.test(sig)) return false;
+  try {
+    const key = await crypto.subtle.importKey("raw", unhex(env.DISCORD_PUBLIC_KEY), { name: "Ed25519" }, false, ["verify"]);
+    return await crypto.subtle.verify("Ed25519", key, unhex(sig), new TextEncoder().encode(ts + body));
+  } catch {
+    return false;
+  }
+}
+
+const EPHEMERAL = 64;
+const reply = (content) => json({ type: 4, data: { content, flags: EPHEMERAL } });
+const vpText = (n) => `${(Number(n) || 0).toLocaleString("en-US")} VP`;
+
+function storeEmbed(name, r, origin) {
+  const embed = { title: name, color: 0xff4655, fields: [] };
+  const snap = r.snap;
+  if (!snap) {
+    embed.description = `No store data yet. Reconnect this account at ${origin}/account/connect.`;
+    return embed;
+  }
+  const now = Date.now();
+  const unix = (s) => Math.floor(Number(s));
+  const lines = (items, extra = () => "") => items.map((s) => `**${s.name}**: ${vpText(s.vp)}${extra(s)}`).join("\n");
+  if (now > snap.daily_ends_at * 1000) {
+    embed.description = `This snapshot is out of date (taken <t:${unix(snap.fetched_at)}:R>). Open ${origin}/account to refresh it.`;
+  } else {
+    embed.description = `Resets <t:${unix(snap.daily_ends_at)}:R>`;
+  }
+  embed.fields.push({ name: "Daily store", value: lines(snap.daily || []).slice(0, 1024) || "Empty" });
+  const nm = snap.night_market;
+  if (nm && now < nm.ends_at * 1000 && (nm.items || []).length) {
+    embed.fields.push({
+      name: `Night Market (ends <t:${unix(nm.ends_at)}:R>)`,
+      value: lines(nm.items, (s) => ` (${Number(s.discount) || 0}% off)`).slice(0, 1024),
+    });
+  }
+  if (r.expired) embed.footer = { text: "The saved Riot login has expired. Reconnect on the website." };
+  else if (r.failed) embed.footer = { text: "Could not refresh from Riot" + (r.error ? ": " + r.error : ".") };
+  return embed;
+}
+
+async function storeCommand(env, interaction, userId, origin) {
+  const opt = (interaction.data.options || []).find((o) => o.name === "account");
+  const accs = await getAccounts(env, userId);
+  if (!accs.length) return { content: `You have not linked a Riot account yet. Do it at ${origin}/account/connect, then run /store again.` };
+  const picked = matchAccounts(accs, opt?.value);
+  if (!picked.length) {
+    return { content: `No linked Riot account matches "${opt.value}". Linked accounts: ${accs.map(acctName).join(", ")}.` };
+  }
+  const embeds = await Promise.all(
+    picked.map(async ({ a, name }) => storeEmbed(name, await loadSnapshot(env, userId, a.puuid), origin))
+  );
+  return { embeds };
+}
+
+// loadSnapshot can call Riot, which may take longer than the 3 seconds Discord allows for a first
+// answer. So the reply is deferred right away and filled in afterwards.
+async function followUp(interaction, data) {
+  const r = await fetch(`https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "User-Agent": DISCORD_UA },
+    body: JSON.stringify({ allowed_mentions: { parse: [] }, ...data }),
+  });
+  if (!r.ok) console.error("Discord follow-up failed", r.status);
+}
+
+async function interactions(request, env, ctx) {
+  const body = await request.text();
+  if (!(await verifyDiscord(env, request, body))) return new Response("invalid request signature", { status: 401 });
+  const interaction = JSON.parse(body);
+  if (interaction.type === 1) return json({ type: 1 }); // PING
+
+  const origin = new URL(request.url).origin;
+  const du = interaction.member?.user || interaction.user;
+  if (!du?.id) return reply("Could not tell who you are.");
+  const user = { id: String(du.id), username: String(du.username || ""), login: String(du.global_name || du.username || "") };
+  const allowed = isAllowed(env, user);
+
+  if (interaction.type === 4) {
+    // Autocomplete for the "account" option: this user's linked accounts, filtered by what they typed.
+    const typed = String(interaction.data?.options?.find((o) => o.focused)?.value || "");
+    const accs = allowed ? await getAccounts(env, user.id) : [];
+    const choices = matchAccounts(accs, typed)
+      .slice(0, 25)
+      .map((p) => ({ name: p.name.slice(0, 100), value: p.a.puuid }));
+    return json({ type: 8, data: { choices } });
+  }
+
+  if (interaction.type === 2 && interaction.data?.name === "store") {
+    if (!allowed) return reply("Your Discord account is not on this server's allow list.");
+    ctx.waitUntil(
+      storeCommand(env, interaction, user.id, origin)
+        .catch((e) => {
+          console.error(e);
+          return { content: "Something went wrong reading your store. Try again in a moment." };
+        })
+        .then((data) => followUp(interaction, data))
+    );
+    return json({ type: 5, data: { flags: EPHEMERAL } });
+  }
+  return reply("Unknown command.");
+}
+
 // ---------- OAuth for Claude: consent, then Discord ----------
 
 function consentPage(d, handle, headers) {
@@ -990,6 +1114,7 @@ const privacyPage = () =>
 <li><strong>"Stay logged in" (optional, off by default).</strong> If you turn it on, we also save your Riot login cookies, encrypted, and use them only to refresh your store when it has rotated. The encryption key is a secret held by the operator, so the operator could technically decrypt them. Only turn this on if you trust the operator. You can remove it at any time by removing the account.</li>
 <li><strong>Sign-in session.</strong> We set one strictly necessary cookie to keep you signed in and keep a matching server-side session record (your Discord ID and name, plus a token that protects forms). It expires after one hour.</li>
 <li><strong>Claude connector.</strong> If you add the connector, we keep a record of the app you approved and its access. When you ask Claude for your store, we send it your store details as text. What Claude does with that text is covered by Anthropic's own policies.</li>
+<li><strong>Discord app.</strong> If you add the Discord app to your profile and run <code>/store</code>, Discord sends us your Discord user ID and name with the command so we can find your linked accounts. We reply with your store details, visible only to you. We do not read or store messages, servers or channels.</li>
 </ul>
 <p>We do not collect payment details, we do not sell or share your data for advertising, and we do not run analytics or advertising trackers.</p>
 
@@ -1151,9 +1276,10 @@ const landing = (origin) =>
   );
 
 const defaultHandler = {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     try {
+      if (url.pathname === "/interactions" && request.method === "POST") return await interactions(request, env, ctx);
       if (url.pathname === "/authorize") {
         if (request.method === "GET") return await authorizeGet(request, env);
         if (request.method === "POST") return await authorizePost(request, env);
@@ -1163,7 +1289,7 @@ const defaultHandler = {
         const sess = await getSession(request, env);
         if (!sess) return await startAccount(request, env);
         if (url.pathname === "/account/connect") return await connectView(env, sess, url.origin);
-        if (url.pathname === "/account/claude") return claudeView(sess, url.origin);
+        if (url.pathname === "/account/claude") return claudeView(env, sess, url.origin);
         return await storeView(env, sess, url.origin, "", null, url.searchParams.get("acc") || "");
       }
       if (url.pathname.startsWith("/account/") && request.method === "POST") return await accountPost(request, env, url);

@@ -1,0 +1,18 @@
+[
+  {
+    "name": "store",
+    "type": 1,
+    "description": "Show your Valorant daily store and Night Market",
+    "integration_types": [1],
+    "contexts": [0, 1, 2],
+    "options": [
+      {
+        "name": "account",
+        "description": "Which linked Riot account to show (default: all of them)",
+        "type": 3,
+        "required": false,
+        "autocomplete": true
+      }
+    ]
+  }
+]
