@@ -13,12 +13,14 @@ import OAuthProvider, {
 } from "@cloudflare/workers-oauth-provider";
 
 import { skinTile } from "./storeimage.js";
-import { RIOT_LOGIN_URL, RiotError, fetchSnapshot, parseCookies, parseTokens, reauth, seal, unseal } from "./riot.js";
+import { RIOT_LOGIN_URL, RiotError, SNAPSHOT_VERSION, fetchSnapshot, parseCookies, parseTokens, reauth, seal, unseal } from "./riot.js";
 
 const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
 const randHex = (n) => hex(crypto.getRandomValues(new Uint8Array(n)));
 
 const ICON_RE = /^https:\/\/media\.valorant-api\.com\/[\w\/.-]{1,200}$/;
+const VIDEO_RE = /^https:\/\/valorant\.dyn\.riotcdn\.net\/[\w\/.-]{1,200}\.mp4$/;
+const safeVideo = (u) => (typeof u === "string" && VIDEO_RE.test(u) ? u : "");
 const safeIcon = (u) => (typeof u === "string" && ICON_RE.test(u) ? u : null);
 const VP_ICON = "https://media.valorant-api.com/currencies/85ad13f7-3d1b-5128-9eb2-7cd8ee0b5741/displayicon.png";
 
@@ -187,6 +189,10 @@ background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 7
 .vp{flex:none;display:inline-flex;align-items:center;gap:.35rem;font:700 1.05rem/1 var(--display);letter-spacing:.04em}.vp img{width:1rem;height:1rem}
 .off{position:absolute;top:.6rem;left:.6rem;z-index:1;background:var(--red);color:#fff;font:800 .9rem/1 var(--display);letter-spacing:.08em;padding:.3rem .5rem}
 .skin[style*="--tier"]{box-shadow:inset 0 3px 0 var(--tier)}
+.play{all:unset;box-sizing:border-box;position:absolute;right:.6rem;bottom:.6rem;z-index:1;width:2.2rem;height:2.2rem;cursor:pointer;background:rgba(15,25,35,.75);border:1px solid rgba(236,232,225,.35);display:grid;place-items:center;transition:background .2s}
+.play::before{content:"";border-style:solid;border-width:.4rem 0 .4rem .65rem;border-color:transparent transparent transparent #ece8e1;margin-left:.15rem}
+.play:hover{background:var(--red)}.play:focus-visible{outline:2px solid #fff;outline-offset:1px}.play[hidden]{display:none}
+.art video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;z-index:2}.art.playing .play{display:none}
 .tags{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding:0 .95rem .6rem;font:600 .75rem/1 var(--display);letter-spacing:.1em;text-transform:uppercase;color:rgba(236,232,225,.7)}
 .tier{display:inline-flex;align-items:center;gap:.35rem;color:var(--tier,#ece8e1)}
 .vars{display:flex;gap:.4rem;flex-wrap:wrap;padding:0 .95rem .85rem}
@@ -203,7 +209,10 @@ background:radial-gradient(70% 60% at 50% 38%,rgba(255,255,255,.1),transparent 7
 @media(prefers-contrast:more){.sub,.lead{color:var(--text)}.card{box-shadow:inset 0 0 0 1px var(--text)}}
 `;
 
-const SWATCH_JS = `document.addEventListener("click",function(e){var b=e.target.closest(".sw");if(!b)return;var c=b.closest(".skin"),i=c.querySelector(".art img");if(i&&b.dataset.art)i.src=b.dataset.art;c.querySelectorAll(".sw").forEach(function(x){x.classList.toggle("on",x===b)})});`;
+const SWATCH_JS = `document.addEventListener("click",function(e){var c=e.target.closest(".skin");if(!c)return;var a=c.querySelector(".art");
+function stop(){var v=a.querySelector("video");if(v){v.remove();a.classList.remove("playing")}}
+var p=e.target.closest(".play");if(p){var u=c.dataset.video;if(!u)return;stop();var v=document.createElement("video");v.src=u;v.controls=true;v.autoplay=true;v.playsInline=true;v.addEventListener("ended",stop);a.appendChild(v);a.classList.add("playing");return}
+var b=e.target.closest(".sw");if(!b)return;stop();var i=a.querySelector("img");if(i&&b.dataset.art)i.src=b.dataset.art;c.dataset.video=b.dataset.video||"";var pl=a.querySelector(".play");if(pl)pl.hidden=!b.dataset.video;c.querySelectorAll(".sw").forEach(function(x){x.classList.toggle("on",x===b)})});`;
 const COPY_JS = `document.addEventListener("click",function(e){var b=e.target.closest("[data-copy]");if(!b)return;
 var t=b.getAttribute("data-copy"),o=b.textContent;
 (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent="Copied"},function(){b.textContent="Press Ctrl+C"});
@@ -390,7 +399,7 @@ async function loadSnapshot(env, userId, puuid, { force = false } = {}) {
   const snapKey = `snap:${userId}:${puuid}`;
   const riotKey = `riot:${userId}:${puuid}`;
   const out = { snap: await env.STORE.get(snapKey, "json"), attempted: false, expired: false, failed: false, error: "" };
-  if (!force && out.snap && Date.now() <= out.snap.daily_ends_at * 1000) return out;
+  if (!force && out.snap?.v === SNAPSHOT_VERSION && Date.now() <= out.snap.daily_ends_at * 1000) return out;
   const rec = await env.STORE.get(riotKey, "json");
   if (!rec?.sealed || !env.RIOT_ENCRYPTION_KEY) return out;
   out.attempted = true;
@@ -589,15 +598,16 @@ function skinCard(s, i) {
   const chromas = (s.chromas || []).filter((c) => safeIcon(c.swatch)).slice(0, 8);
   const levels = Number(s.levels) || 0;
   const variants = chromas.length
-    ? `<div class="vars" role="group" aria-label="Variants"><button type="button" class="sw on" data-art="${esc(icon || "")}" title="Base" aria-label="Base"><span style="background:#ece8e1"></span></button>${chromas
-        .map((c) => `<button type="button" class="sw" data-art="${esc(safeIcon(c.icon) || icon || "")}" title="${esc(c.name)}" aria-label="${esc(c.name)}"><img src="${esc(safeIcon(c.swatch))}" alt="" loading="lazy" width="22" height="22"></button>`)
+    ? `<div class="vars" role="group" aria-label="Variants"><button type="button" class="sw on" data-art="${esc(icon || "")}" data-video="${esc(safeVideo(s.video))}" title="Base" aria-label="Base"><span style="background:#ece8e1"></span></button>${chromas
+        .map((c) => `<button type="button" class="sw" data-art="${esc(safeIcon(c.icon) || icon || "")}" data-video="${esc(safeVideo(c.video))}" title="${esc(c.name)}" aria-label="${esc(c.name)}"><img src="${esc(safeIcon(c.swatch))}" alt="" loading="lazy" width="22" height="22"></button>`)
         .join("")}</div>`
     : "";
   const tag = t || levels > 1
     ? `<div class="tags">${t ? `<span class="tier">${tIcon ? `<img src="${esc(tIcon)}" alt="" width="16" height="16">` : ""}${esc(t.name)}</span>` : ""}${levels > 1 ? `<span class="lv">${levels} levels</span>` : ""}</div>`
     : "";
-  return `<article class="skin" style="--i:${i}${color ? `;--tier:${color}` : ""}">
-<div class="art${icon ? "" : " none"}">${off ? `<span class="off">-${off}%</span>` : ""}${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : ""}</div>
+  const video = safeVideo(s.video);
+  return `<article class="skin" data-video="${esc(video)}" style="--i:${i}${color ? `;--tier:${color}` : ""}">
+<div class="art${icon ? "" : " none"}">${off ? `<span class="off">-${off}%</span>` : ""}${icon ? `<img src="${esc(icon)}" alt="" loading="lazy" decoding="async">` : ""}<button type="button" class="play" aria-label="Play preview"${video ? "" : " hidden"}></button></div>
 <div class="meta"><span class="nm">${esc(s.name)}</span><span class="vp"><img src="${VP_ICON}" alt="VP" width="16" height="16">${(Number(s.vp) || 0).toLocaleString("en-US")}</span></div>
 ${tag}${variants}
 </article>`;
@@ -1197,7 +1207,7 @@ const privacyPage = () =>
 <ul>
 <li><strong>Cloudflare</strong> hosts the service and stores your data in its Workers KV database. Cloudflare also processes technical request data such as your IP address.</li>
 <li><strong>Discord</strong> handles sign-in. <strong>Riot Games</strong> receives the requests we make to read your store.</li>
-<li><strong>Google Fonts</strong> and <strong>valorant-api.com</strong> are loaded by your browser for fonts and skin images, so they can see your IP address and browser details when you visit.</li>
+<li><strong>Google Fonts</strong> and <strong>valorant-api.com</strong> are loaded by your browser for fonts and skin images, so they can see your IP address and browser details when you visit. If you press play on a skin preview, your browser also loads that video from <strong>Riot's content servers</strong> (valorant.dyn.riotcdn.net), which can see the same.</li>
 </ul>
 
 <h2>How long we keep it</h2>
